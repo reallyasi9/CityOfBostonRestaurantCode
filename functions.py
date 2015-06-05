@@ -41,7 +41,7 @@ def get_top_features(features, model, level, limit, bottom=False):
         :param model: a fitted linear regression model
         :param level: 0, 1, 2 for *, **, *** violation levels
         :param limit: how many features to return
-        :param worst: if we want the bottom features rather than the top
+        :param bottom: if we want the bottom features rather than the top
     """
     # sort order for the coefficients
     sorted_coeffs = argsort(model.coef_[level])

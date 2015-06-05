@@ -1,13 +1,10 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 import numpy as np
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn import linear_model
-from functions import flatten_reviews,get_top_features
-
-#import warnings
-#warnings.filterwarnings("ignore")
+from functions import flatten_reviews
 
 def main():
     id_map = pd.read_csv("data/restaurant_ids_to_yelp_ids.csv")
@@ -40,7 +37,7 @@ def main():
                  axis=1)
 
     # replace yelp business_id with boston restaurant_id
-    map_to_boston_ids = lambda yelp_id: id_dict[yelp_id] if yelp_id in id_dict else np.nan
+    map_to_boston_ids = lambda yid: id_dict[yid] if yid in id_dict else np.nan
     reviews.business_id = reviews.business_id.map(map_to_boston_ids)
 
     # rename first column to restaurant_id so we can join with boston data
@@ -78,11 +75,11 @@ def main():
     ols.fit(train_tfidf, train_targets)
 
     # get the names of the features
-    feature_names = np.array(vec.get_feature_names())
+    # feature_names = np.array(vec.get_feature_names())
 
     # get the features that indicate we are most and least likely to see violations
-    worst_feature_sets = [get_top_features(feature_names, ols, i, 100) for i in range(3)]
-    best_feature_sets = [get_top_features(feature_names, ols, i, 100, bottom=True) for i in range(3)]
+    # worst_feature_sets = [get_top_features(feature_names, ols, i, 100) for i in range(3)]
+    # best_feature_sets = [get_top_features(feature_names, ols, i, 100, bottom=True) for i in range(3)]
 
     # create the same tfidf matrix for the test set
     # so we can make predictions based on the same features
