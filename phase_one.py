@@ -2,12 +2,18 @@
 
 import numpy as np
 import pandas as pd
+# import scipy.sparse as sps
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn import linear_model
+from sklearn.linear_model import LinearRegression
+# from sklearn import cross_validation
 from functions import flatten_reviews
 
-def main():
-    id_map = pd.read_csv("data/restaurant_ids_to_yelp_ids.csv")
+def build_restaurant_id_map(csvfile):
+    """ Build a map between Boston ID and Yelp ID
+        :param csvfile: A CSV file containing Boston-to-Yelp ID mappings
+        :return a dict containing a mapping between Boston ID and Yelp ID
+    """
+    id_map = pd.read_csv(csvfile)
     id_dict = {}
 
     # each Yelp ID may correspond to up to 4 Boston IDs
@@ -22,6 +28,13 @@ def main():
         for yelp_id in yelp_ids:
             id_dict[yelp_id] = boston_id
 
+    return id_dict
+
+
+def main():
+
+    id_dict = build_restaurant_id_map('data/restaurant_ids_to_yelp_ids.csv')
+
     with open("data/yelp_academic_dataset_review.json", 'r') as review_file:
         # the file is not actually valid json since each line is an individual
         # dict -- we will add brackets on the very beginning and ending in order
@@ -32,7 +45,7 @@ def main():
     reviews = pd.read_json(review_json)
 
     # drop columns that we won't use
-    reviews.drop(['review_id', 'type', 'user_id', 'votes'],
+    reviews.drop(['review_id', 'type'],
                  inplace=True,
                  axis=1)
 
@@ -41,7 +54,7 @@ def main():
     reviews.business_id = reviews.business_id.map(map_to_boston_ids)
 
     # rename first column to restaurant_id so we can join with boston data
-    reviews.columns = ["restaurant_id", "date", "stars", "text"]
+    reviews.columns = ["restaurant_id", "date", "stars", "text", "user_id", "votes"]
 
     # drop restaurants not found in boston data
     reviews = reviews[pd.notnull(reviews.restaurant_id)]
@@ -56,20 +69,23 @@ def main():
 
     test_text = pd.Series(test_dictionary)[submission.index]
 
-    # create a TfidfVectorizer object with english stop words
-    # and a maximum of 1500 features (to ensure that we can
-    # train the model in a reasonable amount of time)
-    vec = TfidfVectorizer(stop_words='english',
-                          max_features=1500)
+    # create a TfidfVectorizer object
+    vec = TfidfVectorizer(stop_words=None,    # stop words will be dynamically calculated
+                          max_df=1.0,         # if a word appears in this fraction of the documents, ignore it
+                          max_features=1500,  # whatever, I have a lot of RAM
+                          ngram_range=(1, 2)  # up to 2-grams, because I love wasting RAM and time!
+                          )
 
     # create the TfIdf feature matrix from the raw text
     train_tfidf = vec.fit_transform(train_text)
 
+    # TODO concatenate the other columns to the training set?
+
     # get just the targets from the training labels
     train_targets = train_labels[['*', '**', '***']].astype(np.float64)
 
-    # create a Linear regresion object
-    ols = linear_model.LinearRegression()
+    # create a Linear regression object
+    ols = LinearRegression()
 
     # fit that object on the training TfIdf matrix and target variables
     ols.fit(train_tfidf, train_targets)
