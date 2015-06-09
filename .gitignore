@@ -4,3 +4,5 @@
 # exclude myscripts folder
 /myscripts
 /mysciprts/*
+# exclude compiled python code
+*.pyc
