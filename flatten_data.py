@@ -102,12 +102,12 @@ def flatten_business_data(jsonfile, yelp_to_boston_ids):
 
     # Set NaNs from certain columns to meaningful values
     for col in df.columns.values.tolist():
-        if col[:13] == 'neighborhoods':
-            df.ix[pd.isnull(df[col]), col] = False
+        #if col[:13] == 'neighborhoods':
+        df.ix[pd.isnull(df[col]), col] = False
 
     # Set hours to seconds from midnight
     def hour_to_seconds(hour):
-        if hour is None:
+        if hour is None or hour is False:
             return None
         x = time.strptime(hour, '%H:%M')
         return datetime.timedelta(hours=x.tm_hour, minutes=x.tm_min, seconds=x.tm_sec).total_seconds()
@@ -119,31 +119,22 @@ def flatten_business_data(jsonfile, yelp_to_boston_ids):
 
         nonsense = df['hours.' + d + '.close'] <= df['hours.' + d + '.open']
         df.ix[nonsense, 'hours.' + d + '.close'] += 24 * 3600
+        
+    # Set NaNs from certain columns to meaningful values
+    for col in df.columns.values.tolist():
+        if col[:5] != 'hours.':
+            df.ix[pd.isnull(df[col]), col] = False
 
+    # Rename the column I am going to use as the index
+    df.rename(columns={'business_id':'restaurant_id'}, inplace=True)
+    
     return df
 
 
 def main():
     id_dict = build_restaurant_id_map('data/restaurant_ids_to_yelp_ids.csv')
-
-    with open("data/yelp_academic_dataset_review.json", 'r') as review_file:
-        # the file is not actually valid json since each line is an individual
-        # dict -- we will add brackets on the very beginning and ending in order
-        # to make this an array of dicts and join the array entries with commas
-        review_json = '[' + ','.join(review_file.readlines()) + ']'
-
-    # read in the json as a DataFrame
-    reviews = pd.read_json(review_json)
-
-    # drop columns that we won't use
-    reviews.drop(['review_id', 'type'],
-                 inplace=True,
-                 axis=1)
-
-    # replace yelp business_id with boston restaurant_id
-    map_to_boston_ids = lambda yid: id_dict[yid] if yid in id_dict else np.nan
-    reviews.business_id = reviews.business_id.map(map_to_boston_ids)
-
+    business_data = flatten_business_data('data/yelp_academic_dataset_business.json', id_dict)
+    business_data.to_csv("processed_data/business_data.csv", index=False)
     # TODO continue flattening things!
 
 if __name__ == "__main__":

@@ -1,6 +1,8 @@
 # exclude data folder
 /data
 /data/*
+/processed_data
+/processed_data/*
 # exclude myscripts folder
 /myscripts
 /mysciprts/*
