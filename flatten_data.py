@@ -5,6 +5,8 @@ import pandas as pd
 import datetime
 import time
 import numpy as np
+import re
+from numpy import nan
 
 
 def build_restaurant_id_map(csvfile):
@@ -29,6 +31,18 @@ def build_restaurant_id_map(csvfile):
 
     return id_dict
 
+def flatten(structure, key="", path="", flattened=None):
+    if flattened is None:
+        flattened = {}
+    if type(structure) not in(dict, list):
+        flattened[((path + ".") if path else "") + key] = structure
+    elif isinstance(structure, list):
+        for i, item in enumerate(structure):
+            flattened[((path + ".") if path else "") + key + "." + item] = True
+    else:
+        for new_key, value in structure.items():
+            flatten(value, new_key, ((path + ".") if path else "") + key, flattened)
+    return flattened
 
 def flatten_business_data(jsonfile, yelp_to_boston_ids):
     """ Construct a pandas 2D dataset from the businesses json
@@ -52,63 +66,25 @@ def flatten_business_data(jsonfile, yelp_to_boston_ids):
 
     flattened_json = []
     for obj in jd:
-        json_obj = {}
-        for k, v in obj.items():
-            # Collect categories
-            if k == 'categories':
-                for cat in v:
-                    json_obj['categories.' + cat] = True
-
-            # Collect attributes
-            elif k == 'attributes':
-                for attr, val in v.items():
-                    if attr == 'Parking':
-                        for prk, pval in val.items():
-                            json_obj['attributes.Parking.' + prk] = pval
-                    elif attr == 'Ambience':
-                        for amb, aval in val.items():
-                            json_obj['attributes.Ambience.' + amb] = aval
-                    elif attr == 'Good For':
-                        for gf, gval in val.items():
-                            json_obj['attributes.Good For.' + gf] = gval
-                    else:
-                        json_obj['attributes.' + attr] = val
-
-            # Collect business hours
-            elif k == 'hours':
-                for d in ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']:
-                    for e in ['open', 'close']:
-                        json_obj['hours.' + d + '.' + e] = v.get(d, {}).get(e, None)
-
-            # Collect neighborhoods
-            elif k == 'neighborhoods':
-                for n in v:
-                    json_obj['neighborhoods.' + n] = True
-
-            # Collect everything else
-            else:
-                json_obj[k] = v
+        json_obj = flatten(obj)
         flattened_json.append(json_obj)
 
     # Now actually build out the dataset
     df = pd.DataFrame(flattened_json)
+    
+    # TODO: Strip out the zip code, because that might be useful
 
     # And get rid of useless columns
-    df.drop(['type', 'state', 'open'], inplace=True, axis=1)
+    df.drop(['type', 'state', 'open', 'full_address', 'name'], inplace=True, axis=1)
 
     # And set the business IDs
     map_to_boston_ids = lambda yid: yelp_to_boston_ids[yid] if yid in yelp_to_boston_ids else np.nan
     df.business_id = df.business_id.map(map_to_boston_ids)
 
-    # Set NaNs from certain columns to meaningful values
-    for col in df.columns.values.tolist():
-        #if col[:13] == 'neighborhoods':
-        df.ix[pd.isnull(df[col]), col] = False
-
     # Set hours to seconds from midnight
     def hour_to_seconds(hour):
-        if hour is None or hour is False:
-            return None
+        if hour is None or hour != hour:
+            return -1
         x = time.strptime(hour, '%H:%M')
         return datetime.timedelta(hours=x.tm_hour, minutes=x.tm_min, seconds=x.tm_sec).total_seconds()
 
@@ -127,6 +103,11 @@ def flatten_business_data(jsonfile, yelp_to_boston_ids):
 
     # Rename the column I am going to use as the index
     df.rename(columns={'business_id':'restaurant_id'}, inplace=True)
+    
+    # Replace empty or undefined values with NaN
+    df.fillna(np.nan)
+    df.replace("False", np.nan, inplace=True)
+    df.replace(False, np.nan, inplace=True)
     
     return df
 
