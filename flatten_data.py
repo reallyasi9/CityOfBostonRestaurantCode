@@ -72,10 +72,12 @@ def flatten_business_data(jsonfile, yelp_to_boston_ids):
     # Now actually build out the dataset
     df = pd.DataFrame(flattened_json)
     
-    # TODO: Strip out the zip code, because that might be useful
+    # Strip out the zip code, because that might be useful
+    p = re.compile(r"(\d{5,5})(-\d{4,4})?");
+    df['zip'] = df['full_address'].map(lambda x: p.search(x).group(1) if p.search(x) is not None else None)
 
     # And get rid of useless columns
-    df.drop(['type', 'state', 'open', 'full_address', 'name'], inplace=True, axis=1)
+    df.drop(['type', 'state', 'open', 'name', 'full_address'], inplace=True, axis=1)
 
     # And set the business IDs
     map_to_boston_ids = lambda yid: yelp_to_boston_ids[yid] if yid in yelp_to_boston_ids else np.nan
