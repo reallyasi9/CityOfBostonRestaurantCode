@@ -73,7 +73,7 @@ def flatten_business_data(jsonfile, yelp_to_boston_ids):
     df = pd.DataFrame(flattened_json)
     
     # Strip out the zip code, because that might be useful
-    p = re.compile(r"(\d{5,5})(-\d{4,4})?");
+    p = re.compile(r"(\d{5})(-\d{4})?")
     df['zip'] = df['full_address'].map(lambda x: p.search(x).group(1) if p.search(x) is not None else None)
 
     # And get rid of useless columns
@@ -104,17 +104,19 @@ def flatten_business_data(jsonfile, yelp_to_boston_ids):
             df.ix[pd.isnull(df[col]), col] = False
 
     # Rename the column I am going to use as the index
-    df.rename(columns={'business_id':'restaurant_id'}, inplace=True)
+    df.rename(columns={'business_id': 'restaurant_id'}, inplace=True)
     
-    # Replace empty or undefined values with NaN
-    df.fillna(np.nan)
-    df.replace("False", np.nan, inplace=True)
-    df.replace(False, np.nan, inplace=True)
+    # Replace empty or undefined values with something that can be handled by the ML algorithms
+    # df.fillna(np.nan)
+    # df.replace("False", np.nan, inplace=True)
+    # df.replace(False, np.nan, inplace=True)
     
     return df
 
 
 def main():
+    # TODO Handle options for input/output
+    # TODO Add flags to determine what gets read
     id_dict = build_restaurant_id_map('data/restaurant_ids_to_yelp_ids.csv')
     business_data = flatten_business_data('data/yelp_academic_dataset_business.json', id_dict)
     business_data.to_csv("processed_data/business_data.csv", index=False)
