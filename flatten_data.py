@@ -6,7 +6,6 @@ import datetime
 import time
 import numpy as np
 import re
-from numpy import nan
 
 
 def build_restaurant_id_map(csvfile):
@@ -76,12 +75,12 @@ def flatten_business_data(jsonfile, yelp_to_boston_ids):
     p = re.compile(r"(\d{5})(-\d{4})?")
     df['zip'] = df['full_address'].map(lambda x: p.search(x).group(1) if p.search(x) is not None else None)
 
-    # And get rid of useless columns
-    df.drop(['type', 'state', 'open', 'name', 'full_address'], inplace=True, axis=1)
-
     # And set the business IDs
     map_to_boston_ids = lambda yid: yelp_to_boston_ids[yid] if yid in yelp_to_boston_ids else np.nan
-    df.business_id = df.business_id.map(map_to_boston_ids)
+    df['restaurant_id'] = df['business_id'].map(map_to_boston_ids)
+
+    # And get rid of useless columns
+    df.drop(['type', 'state', 'open', 'name', 'full_address', 'business_id'], inplace=True, axis=1)
 
     # Set hours to seconds from midnight
     def hour_to_seconds(hour):
@@ -99,17 +98,14 @@ def flatten_business_data(jsonfile, yelp_to_boston_ids):
         df.ix[nonsense, 'hours.' + d + '.close'] += 24 * 3600
         
     # Set NaNs from certain columns to meaningful values
-    for col in df.columns.values.tolist():
-        if col[:5] != 'hours.':
-            df.ix[pd.isnull(df[col]), col] = False
+    # for col in df.columns.values.tolist():
+    #     if col[:5] != 'hours.':
+    #         df.ix[pd.isnull(df[col]), col] = False
 
-    # Rename the column I am going to use as the index
-    df.rename(columns={'business_id': 'restaurant_id'}, inplace=True)
-    
     # Replace empty or undefined values with something that can be handled by the ML algorithms
     # df.fillna(np.nan)
-    # df.replace("False", np.nan, inplace=True)
-    # df.replace(False, np.nan, inplace=True)
+    df.replace("False", "", inplace=True)
+    # df.replace(False, 0, inplace=True)
     
     return df
 
