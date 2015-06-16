@@ -8,3 +8,4 @@
 /mysciprts/*
 # exclude compiled python code
 *.pyc
+/.idea
