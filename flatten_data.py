@@ -31,6 +31,35 @@ def build_restaurant_id_map(csvfile):
     return id_dict
 
 def flatten(structure, key="", path="", flattened=None):
+    """
+    Recursive function for flattening a dictionary.
+    If the dictionary passed has the following structure:
+    {
+        a: 123,
+        b: ["one", "two", 3.14],
+        c: {
+            d: False,
+            e: ["three", 4]
+        }
+    }
+    The resulting dictionary will look something like this:
+    {
+        a: 123,
+        b.one: True,
+        b.two: True,
+        b.3.14: True,
+        c.d: False,
+        c.e.three: True,
+        c.e.4: True
+    }
+
+    As a note, this is not a universal function, and will probably fail if given something like a list of dicts.
+    :param structure: The object to add to the resulting dict (any type you would usually find in json).
+    :param key: The key of the object to add to the resulting dict (string).
+    :param path: The path to the given structure in the original dict (string).
+    :param flattened: The flattened dict, for passing between recursive iterations.
+    :return: a flattened version of the input dict.
+    """
     if flattened is None:
         flattened = {}
     if type(structure) not in(dict, list):
@@ -48,7 +77,7 @@ def flatten_business_data(jsonfile, yelp_to_boston_ids):
 
     :param jsonfile: The name of the file to parse
     :param yelp_to_boston_ids: A dict that maps from yelp IDs to Boston IDs
-    :return: A 2D pandas dataset, keyed by Boston ID, with all fields from the JSON file flattened in a standard way.
+    :return: A 2D pandas dataset with all fields from the JSON file flattened in a standard way.
     """
     # Load json as an array of dicts
     with open(jsonfile) as jfile:
@@ -79,8 +108,11 @@ def flatten_business_data(jsonfile, yelp_to_boston_ids):
     map_to_boston_ids = lambda yid: yelp_to_boston_ids[yid] if yid in yelp_to_boston_ids else np.nan
     df['restaurant_id'] = df['business_id'].map(map_to_boston_ids)
 
+    # FIXME And drop duplicated restaurants that are no longer open
+    df = df.ix[df['open'].bool() or not df['restaurant_id'].duplicated().bool(), :]
+
     # And get rid of useless columns
-    df.drop(['type', 'state', 'open', 'name', 'full_address', 'business_id'], inplace=True, axis=1)
+    df.drop(['type', 'state'], inplace=True, axis=1)
 
     # Set hours to seconds from midnight
     def hour_to_seconds(hour):
