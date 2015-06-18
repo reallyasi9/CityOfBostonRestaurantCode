@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+# -*- coding: utf-8 -*-
 
 import json
 import pandas as pd
@@ -103,13 +104,19 @@ def flatten_business_data(jsonfile, yelp_to_boston_ids):
     # Strip out the zip code, because that might be useful
     p = re.compile(r"(\d{5})(-\d{4})?")
     df['zip'] = df['full_address'].map(lambda x: p.search(x).group(1) if p.search(x) is not None else None)
+    
+    # Convert the names to non-UTF-8 text, which screws up csv
+    df['name'] = df['name'].map(lambda x: x.encode('ascii', 'ignore'))
 
     # And set the business IDs
     map_to_boston_ids = lambda yid: yelp_to_boston_ids[yid] if yid in yelp_to_boston_ids else np.nan
     df['restaurant_id'] = df['business_id'].map(map_to_boston_ids)
-
-    # FIXME And drop duplicated restaurants that are no longer open
-    df = df.ix[df['open'].bool() or not df['restaurant_id'].duplicated().bool(), :]
+    
+    # Drop those businesses that are not in the boston set
+    df.dropna(axis=0, subset=['restaurant_id'], inplace=True)
+    
+    # FIXME And drop duplicated restaurants that are no longer open?
+    #df = df.ix[df['open'].bool() or not df['restaurant_id'].duplicated().bool(), :]
 
     # And get rid of useless columns
     df.drop(['type', 'state'], inplace=True, axis=1)
