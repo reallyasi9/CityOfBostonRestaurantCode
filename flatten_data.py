@@ -7,7 +7,7 @@ import datetime
 import time
 import numpy as np
 import re
-
+from itertools import chain
 
 def build_restaurant_id_map(csvfile):
     """ Build a map between Boston ID and Yelp ID
@@ -101,25 +101,12 @@ def flatten_business_data(jsonfile, yelp_to_boston_ids):
     # Now actually build out the dataset
     df = pd.DataFrame(flattened_json)
     
-    # Strip out the zip code, because that might be useful
-    p = re.compile(r"(\d{5})(-\d{4})?")
-    df['zip'] = df['full_address'].map(lambda x: p.search(x).group(1) if p.search(x) is not None else None)
-    
-    # Convert the names to non-UTF-8 text, which screws up csv
-    df['name'] = df['name'].map(lambda x: x.encode('ascii', 'ignore'))
-
     # And set the business IDs
     map_to_boston_ids = lambda yid: yelp_to_boston_ids[yid] if yid in yelp_to_boston_ids else np.nan
     df['restaurant_id'] = df['business_id'].map(map_to_boston_ids)
     
     # Drop those businesses that are not in the boston set
     df.dropna(axis=0, subset=['restaurant_id'], inplace=True)
-    
-    # FIXME And drop duplicated restaurants that are no longer open?
-    #df = df.ix[df['open'].bool() or not df['restaurant_id'].duplicated().bool(), :]
-
-    # And get rid of useless columns
-    df.drop(['type', 'state'], inplace=True, axis=1)
 
     # Set hours to seconds from midnight
     def hour_to_seconds(hour):
@@ -127,25 +114,52 @@ def flatten_business_data(jsonfile, yelp_to_boston_ids):
             return -1
         x = time.strptime(hour, '%H:%M')
         return datetime.timedelta(hours=x.tm_hour, minutes=x.tm_min, seconds=x.tm_sec).total_seconds()
-
+    
+    time_cols = []
     for d in ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']:
         for e in ['open', 'close']:
             col = 'hours.' + d + '.' + e
-            df.ix[:, col] = df.ix[:, col].apply(hour_to_seconds)
+            time_cols += [col]
+            df.ix[:, col] = df.ix[:, col].apply(hour_to_seconds).astype('int32')
 
         nonsense = df['hours.' + d + '.close'] <= df['hours.' + d + '.open']
         df.ix[nonsense, 'hours.' + d + '.close'] += 24 * 3600
         
-    # Set NaNs from certain columns to meaningful values
-    # for col in df.columns.values.tolist():
-    #     if col[:5] != 'hours.':
-    #         df.ix[pd.isnull(df[col]), col] = False
+    # Convert columns to explicit types
+    col_types = {
+                'category': ['attributes.Ages Allowed',
+                             'attributes.Alcohol',
+                             'attributes.Attire',
+                             'attributes.BYOB/Corkage',
+                             'attributes.Noise Level',
+                             'attributes.Price Range',
+                             'attributes.Wi-Fi',
+                             'stars'],
+                'int32': ['review_count'] + time_cols,
+                'float32': ['latitude', 'longitude']
+                }
+    for typ, cols in col_types.items():
+        for col in cols:
+            df[col] = df[col].astype(typ)
 
-    # Replace empty or undefined values with something that can be handled by the ML algorithms
-    # df.fillna(np.nan)
-    df.replace("False", "", inplace=True)
-    # df.replace(False, 0, inplace=True)
+    # Everything else is a boolean
+    all_typed_cols = list(chain.from_iterable(col_types.values()))
+    all_typed_cols += ['name', 'restaurant_id', 'business_id', 'full_address']
+    for col in df.columns:
+        if col not in all_typed_cols:
+            df[col] = df[col].astype('bool')
+            df.loc[:,col] = df.loc[:,col].fillna(False)
     
+    # Strip out the zip code, because that might be useful
+    p = re.compile(r"(\d{5})(-\d{4})?")
+    df['zip'] = df['full_address'].map(lambda x: p.search(x).group(1) if p.search(x) is not None else None)
+    
+    # Convert the names to non-UTF-8 text, which screws up csv
+    df['name'] = df['name'].map(lambda x: x.encode('ascii', 'ignore'))
+    
+    # And get rid of useless columns
+    df.drop(['type', 'state'], inplace=True, axis=1)
+
     return df
 
 
