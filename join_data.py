@@ -15,16 +15,17 @@ def date_to_seconds(text):
     return calendar.timegm(x)
 
 def wabbit_it(df):
-    ignored_columns = ['id', 'name', '*', '**', '***']
+    ignored_columns = ['id', 'name', '*', '**', '***', 'full_address', 'city']
     features = df.drop(ignored_columns, axis=1)
-    for n, outcome in enumerate(['*', '**', '***']):
-        with open('processed_data/train' + str(n) + '.txt', 'w') as f:
-            results = df[outcome]
-            for irow in range(1, df.shape[0]):
-                outline = str(results[irow]) + " | "
-                for icol in range(1, features.shape[1]):
-                    outline += features.columns[icol] + ":" + str(features.iloc[irow, icol]) + " "
-                f.write(outline)
+    f = [open('processed_data/train0.txt', 'w'), open('processed_data/train1.txt', 'w'), open('processed_data/train2.txt', 'w')]
+    for irow in range(1, df.shape[0]):
+        outline = ""
+        for icol in range(1, features.shape[1]):
+            if str(features.iloc[irow, icol]) != "nan":
+                outline += str(features.columns[icol]).replace(" ", "_") + ":" + str(features.iloc[irow, icol]) + " "
+        f[0].write(str(df.ix[irow, '*']) + " | " + outline + "\n")
+        f[1].write(str(df.ix[irow, '**']) + " | " + outline + "\n")
+        f[2].write(str(df.ix[irow, '***']) + " | " + outline + "\n")
 
 
 def main():
@@ -58,12 +59,6 @@ def main():
 
     # deal with the repeated business ids by duplicating the training data
     df = df.merge(bc_df, on="restaurant_id")
-
-    # In all features, replace spaces with underscores
-    rename_cols = {}
-    for col in df.columns:
-        rename_cols[col] = col.lower().replace(" ", "_")
-    df.rename(columns=rename_cols, inplace=True)
 
     # TODO other things
 
