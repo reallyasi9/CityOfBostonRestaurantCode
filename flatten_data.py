@@ -5,7 +5,7 @@ import json
 import pandas as pd
 import datetime
 import time
-import numpy as np
+# import numpy as np
 import re
 from itertools import chain
 
@@ -171,7 +171,7 @@ def flatten_checkin_data(jsonfile):
     for col in df.columns:
         if col not in not_integer_types:
             df.loc[:, col] = df.loc[:, col].fillna(0)
-            df[col] = df[col].astype('int32')
+            # df[col] = df[col].astype('int32')
 
     # And get rid of useless columns
     df.drop(['type'], inplace=True, axis=1)
