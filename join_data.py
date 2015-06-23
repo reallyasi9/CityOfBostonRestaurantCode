@@ -16,15 +16,15 @@ def date_to_seconds(text):
 
 def wabbit_it(df):
     ignored_columns = ['id', 'name', '*', '**', '***']
-    features = df.drop([col for col in df.columns if col not in ignored_columns], axis=1)
+    features = df.drop(ignored_columns, axis=1)
     for n, outcome in enumerate(['*', '**', '***']):
-        with open('processed_data/train' + n + '.txt', 'w') as f:
+        with open('processed_data/train' + str(n) + '.txt', 'w') as f:
             results = df[outcome]
             for irow in range(1, df.shape[0]):
-                outline = results[irow] + " | "
+                outline = str(results[irow]) + " | "
                 for icol in range(1, features.shape[1]):
-                    outline += features.columns[icol] + ":" + features[irow, icol] + " "
-            f.write(outline + "\n")
+                    outline += features.columns[icol] + ":" + str(features.iloc[irow, icol]) + " "
+                f.write(outline)
 
 
 def main():
@@ -58,6 +58,12 @@ def main():
 
     # deal with the repeated business ids by duplicating the training data
     df = df.merge(bc_df, on="restaurant_id")
+
+    # In all features, replace spaces with underscores
+    rename_cols = {}
+    for col in df.columns:
+        rename_cols[col] = col.lower().replace(" ", "_")
+    df.rename(columns=rename_cols, inplace=True)
 
     # TODO other things
 
