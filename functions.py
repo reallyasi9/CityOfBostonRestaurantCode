@@ -1,4 +1,5 @@
 from numpy import argsort
+import pandas as pd
 
 # a simple way to create a "document" for an inspection is to
 # concatenate all the reviews that happened before the inspection date
