@@ -52,3 +52,26 @@ def get_top_features(features, model, level, limit, bottom=False):
     else:
         # get the features at the beginning of the sorted list
         return features[sorted_coeffs[:limit]]
+
+
+def build_restaurant_id_map(csvfile):
+    """ Build a map between Boston ID and Yelp ID
+        :param csvfile: A CSV file containing Boston-to-Yelp ID mappings
+        :return a dict containing a mapping between Boston ID and Yelp ID
+    """
+    id_map = pd.read_csv(csvfile)
+    id_dict = {}
+
+    # each Yelp ID may correspond to up to 4 Boston IDs
+    for i, row in id_map.iterrows():
+        # get the Boston ID
+        boston_id = row["restaurant_id"]
+
+        # get the non-null Yelp IDs
+        non_null_mask = ~pd.isnull(row.ix[1:])
+        yelp_ids = row[1:][non_null_mask].values
+
+        for yelp_id in yelp_ids:
+            id_dict[yelp_id] = boston_id
+
+    return id_dict
