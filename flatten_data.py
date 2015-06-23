@@ -9,28 +9,6 @@ import numpy as np
 import re
 from itertools import chain
 
-def build_restaurant_id_map(csvfile):
-    """ Build a map between Boston ID and Yelp ID
-        :param csvfile: A CSV file containing Boston-to-Yelp ID mappings
-        :return a dict containing a mapping between Boston ID and Yelp ID
-    """
-    id_map = pd.read_csv(csvfile)
-    id_dict = {}
-
-    # each Yelp ID may correspond to up to 4 Boston IDs
-    for i, row in id_map.iterrows():
-        # get the Boston ID
-        boston_id = row["restaurant_id"]
-
-        # get the non-null Yelp IDs
-        non_null_mask = ~pd.isnull(row.ix[1:])
-        yelp_ids = row[1:][non_null_mask].values
-
-        for yelp_id in yelp_ids:
-            id_dict[yelp_id] = boston_id
-
-    return id_dict
-
 def flatten(structure, key="", path="", flattened=None):
     """
     Recursive function for flattening a dictionary.
@@ -63,7 +41,7 @@ def flatten(structure, key="", path="", flattened=None):
     """
     if flattened is None:
         flattened = {}
-    if type(structure) not in(dict, list):
+    if type(structure) not in (dict, list):
         flattened[((path + ".") if path else "") + key] = structure
     elif isinstance(structure, list):
         for i, item in enumerate(structure):
@@ -73,7 +51,8 @@ def flatten(structure, key="", path="", flattened=None):
             flatten(value, new_key, ((path + ".") if path else "") + key, flattened)
     return flattened
 
-def flatten_business_data(jsonfile, yelp_to_boston_ids):
+
+def flatten_business_data(jsonfile):
     """ Construct a pandas 2D dataset from the businesses json
 
     :param jsonfile: The name of the file to parse
@@ -100,13 +79,13 @@ def flatten_business_data(jsonfile, yelp_to_boston_ids):
 
     # Now actually build out the dataset
     df = pd.DataFrame(flattened_json)
-    
+
     # And set the business IDs
-    map_to_boston_ids = lambda yid: yelp_to_boston_ids[yid] if yid in yelp_to_boston_ids else np.nan
-    df['restaurant_id'] = df['business_id'].map(map_to_boston_ids)
-    
+    # map_to_boston_ids = lambda yid: yelp_to_boston_ids[yid] if yid in yelp_to_boston_ids else np.nan
+    # df['restaurant_id'] = df['business_id'].map(map_to_boston_ids)
+
     # Drop those businesses that are not in the boston set
-    df.dropna(axis=0, subset=['restaurant_id'], inplace=True)
+    # df.dropna(axis=0, subset=['restaurant_id'], inplace=True)
 
     # Set hours to seconds from midnight
     def hour_to_seconds(hour):
@@ -114,7 +93,7 @@ def flatten_business_data(jsonfile, yelp_to_boston_ids):
             return -1
         x = time.strptime(hour, '%H:%M')
         return datetime.timedelta(hours=x.tm_hour, minutes=x.tm_min, seconds=x.tm_sec).total_seconds()
-    
+
     time_cols = []
     for d in ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']:
         for e in ['open', 'close']:
@@ -124,52 +103,131 @@ def flatten_business_data(jsonfile, yelp_to_boston_ids):
 
         nonsense = df['hours.' + d + '.close'] <= df['hours.' + d + '.open']
         df.ix[nonsense, 'hours.' + d + '.close'] += 24 * 3600
-        
+
     # Convert columns to explicit types
     col_types = {
-                'category': ['attributes.Ages Allowed',
-                             'attributes.Alcohol',
-                             'attributes.Attire',
-                             'attributes.BYOB/Corkage',
-                             'attributes.Noise Level',
-                             'attributes.Price Range',
-                             'attributes.Wi-Fi',
-                             'stars'],
-                'int32': ['review_count'] + time_cols,
-                'float32': ['latitude', 'longitude']
-                }
+        'category': ['attributes.Ages Allowed',
+                     'attributes.Alcohol',
+                     'attributes.Attire',
+                     'attributes.BYOB/Corkage',
+                     'attributes.Noise Level',
+                     'attributes.Price Range',
+                     'attributes.Wi-Fi',
+                     'stars'],
+        'int32': ['review_count'] + time_cols,
+        'float32': ['latitude', 'longitude']
+    }
     for typ, cols in col_types.items():
         for col in cols:
             df[col] = df[col].astype(typ)
 
     # Everything else is a boolean
     all_typed_cols = list(chain.from_iterable(col_types.values()))
-    all_typed_cols += ['name', 'restaurant_id', 'business_id', 'full_address']
+    all_typed_cols += ['name', 'business_id', 'full_address']
     for col in df.columns:
         if col not in all_typed_cols:
             df[col] = df[col].astype('bool')
-            df.loc[:,col] = df.loc[:,col].fillna(False)
-    
+            df.loc[:, col] = df.loc[:, col].fillna(False)
+
     # Strip out the zip code, because that might be useful
     p = re.compile(r"(\d{5})(-\d{4})?")
     df['zip'] = df['full_address'].map(lambda x: p.search(x).group(1) if p.search(x) is not None else None)
-    
+
     # Convert the names to non-UTF-8 text, which screws up csv
     df['name'] = df['name'].map(lambda x: x.encode('ascii', 'ignore'))
-    
+
     # And get rid of useless columns
     df.drop(['type', 'state'], inplace=True, axis=1)
 
     return df
 
 
+def flatten_checkin_data(jsonfile):
+    """ Construct a pandas 2D dataset from the checkin json
+
+    :param jsonfile: The name of the file to parse
+    :return: A 2D pandas dataset with all fields from the JSON file flattened in a standard way.
+    """
+    # Load json as an array of dicts
+    with open(jsonfile) as jfile:
+        js = '[' + ','.join(jfile.readlines()) + ']'
+
+    jd = json.loads(js)
+
+    # Flatten json:
+
+    flattened_json = []
+    for obj in jd:
+        json_obj = flatten(obj)
+        flattened_json.append(json_obj)
+
+    # Now actually build out the dataset
+    df = pd.DataFrame(flattened_json)
+
+    # Convert columns to explicit types
+    not_integer_types = ['type', 'business_id']
+
+    # Everything else is an integer
+    for col in df.columns:
+        if col not in not_integer_types:
+            df.loc[:, col] = df.loc[:, col].fillna(0)
+            df[col] = df[col].astype('int32')
+
+    # And get rid of useless columns
+    df.drop(['type'], inplace=True, axis=1)
+
+    return df
+
+
+# def flatten_tip_data(jsonfile):
+#     """ Construct a pandas 2D dataset from the tip json
+#
+#     :param jsonfile: The name of the file to parse
+#     :return: A 2D pandas dataset with all fields from the JSON file flattened in a standard way.
+#     """
+#     # Load json as an array of dicts
+#     with open(jsonfile) as jfile:
+#         js = '[' + ','.join(jfile.readlines()) + ']'
+#
+#     jd = json.loads(js)
+#
+#     # Flatten json:
+#
+#     flattened_json = []
+#     for obj in jd:
+#         json_obj = flatten(obj)
+#         flattened_json.append(json_obj)
+#
+#     # Now actually build out the dataset
+#     df = pd.DataFrame(flattened_json)
+#
+#     # Convert columns to explicit types
+#     not_integer_types = ['type', 'business_id']
+#
+#     # Everything else is an integer
+#     for col in df.columns:
+#         if col not in not_integer_types:
+#             df.loc[:, col] = df.loc[:, col].fillna(0)
+#             df[col] = df[col].astype('int32')
+#
+#     # And get rid of useless columns
+#     df.drop(['type'], inplace=True, axis=1)
+#
+#     return df
+
+
 def main():
     # TODO Handle options for input/output
     # TODO Add flags to determine what gets read
-    id_dict = build_restaurant_id_map('data/restaurant_ids_to_yelp_ids.csv')
-    business_data = flatten_business_data('data/yelp_academic_dataset_business.json', id_dict)
+    business_data = flatten_business_data('data/yelp_academic_dataset_business.json')
     business_data.to_csv("processed_data/business_data.csv", index=False)
+    checkin_data = flatten_checkin_data('data/yelp_academic_dataset_checkin.json')
+    checkin_data.to_csv("processed_data/checkin_data.csv", index=False)
+    # tip_data = flatten_tip_data('data/yelp_academic_dataset_tip.json')
+    # tip_data.to_csv("processed_data/tip_data.csv", index=False)
+
     # TODO continue flattening things!
+
 
 if __name__ == "__main__":
     main()
