@@ -1,61 +1,87 @@
 #!/usr/bin/python3
+import re
 
-import flatten_data
 import functions
 import pandas as pd
 import numpy as np
 
-def wabbit_it(df):
-    ignored_columns = ['id', 'name', '*', '**', '***', 'full_address', 'city']
-    features = df.drop(ignored_columns, axis=1)
-    f = [open('processed_data/train0.txt', 'w'), open('processed_data/train1.txt', 'w'), open('processed_data/train2.txt', 'w')]
-    for irow in range(1, df.shape[0]):
-        outline = ""
-        for icol in range(1, features.shape[1]):
-            if str(features.iloc[irow, icol]) != "nan":
-                outline += str(features.columns[icol]).replace(" ", "_") + ":" + str(features.iloc[irow, icol]) + " "
-        f[0].write(str(df.ix[irow, '*']) + " | " + outline + "\n")
-        f[1].write(str(df.ix[irow, '**']) + " | " + outline + "\n")
-        f[2].write(str(df.ix[irow, '***']) + " | " + outline + "\n")
+
+def wabbit_it(business_data, checkin_data, tip_data, review_data, training_data, df):
+    return
+
+
+class Closest:
+    data = pd.DataFrame()
+    cols = []
+
+    def __init__(self, df, cols):
+        self.data = df
+        return
+
+    def __call__(self, row):
+        found = self.data[(self.data.restaurant_id == row.restaurant_id) & (self.data.date <= row.date)]
+        if found.shape[0] == 0:
+            found = self.data[(self.data.restaurant_id == row.restaurant_id)][self.cols].mean()
+        else:
+            found = found[self.cols].sum()
+        return row.append(found)
+
+
+def create_evaluation_data(business_data, checkin_data, tip_data, review_data, tip_features, review_features,
+                           target_data):
+    df = target_data.copy()
+    bc_df = business_data.merge(checkin_data, on='restaurant_id')
+    closest_tip = Closest(tip_data, tip_features)
+    df = df.apply(closest_tip)
+    closest_review = Closest(review_data, review_features)
+    df = df.apply(closest_review)
+
+    df = df.merge(bc_df, on='restaurant_id')
+    return df
 
 
 def main():
-    business_data = flatten_data.flatten_business_data('data/yelp_academic_dataset_business.json')
-    business_data.set_index("business_id", inplace=True)
-    checkin_data = flatten_data.flatten_checkin_data('data/yelp_academic_dataset_checkin.json')
-    checkin_data.set_index("business_id", inplace=True)
-    features_data = pd.read_excel('processed_data/tfidf.xlsx')
+    business_data = pd.DataFrame.from_csv('processed_data/business_data.csv', index_col="business_id")
+    checkin_data = pd.DataFrame.from_csv('processed_data/checkin_data.csv', index_col="business_id")
+    tip_data = pd.SparseDataFrame.from_csv('processed_data/tip_data.csv')
+    review_data = pd.SparseDataFrame.from_csv('processed_data/review_data.csv')
     training_data = pd.read_csv('data/train_labels.csv')
-    training_data.ix[:, 'date'] = training_data.ix[:, 'date'].apply(date_to_seconds).astype('int32')
+
+    # Convert training date to seconds for easier maths
+    training_data.ix[:, 'date'] = training_data.ix[:, 'date'].apply(functions.date_to_seconds).astype('int32')
+
+    # Figure out the names of the TFIDF feature columns
+    feature_re = re.compile(r'^[tr]\.')
+    tip_features = [col for col in tip_data.columns if feature_re.match(col) is not None]
+    review_features = [col for col in review_data.columns if feature_re.match(col) is not None]
+    feature_cols = tip_features + review_features
+
+    # Add restaurant IDs to everything
     id_dict = functions.build_restaurant_id_map('data/restaurant_ids_to_yelp_ids.csv')
-
-    # features are named with the feature alone: add a prefix
-    rename_cols = {}
-    for col in features_data.columns:
-        rename_cols[col] = "feature." + col
-    features_data.rename(columns=rename_cols, inplace=True)
-
-    # first, join features and training data using the row number
-    df = training_data.join(features_data)
-
-    # next, join business and checkin data on business ID (the index)
-    bc_df = business_data.join(checkin_data)
-
-    # add the restaurant ID to this
     map_to_boston_ids = lambda yid: id_dict[yid] if yid in id_dict else np.nan
-    bc_df['restaurant_id'] = bc_df.index.map(map_to_boston_ids)
 
-    # drop those businesses that are not in the boston dataset
-    bc_df.dropna(axis=0, subset=['restaurant_id'], inplace=True)
+    for df in [business_data, checkin_data, tip_data, review_data]:
+        df['restaurant_id'] = df.index.map(map_to_boston_ids)
+        # drop those businesses that are not in the Boston dataset
+        df.dropna(axis=0, subset=['restaurant_id'], inplace=True)
 
-    # deal with the repeated business ids by duplicating the training data
-    df = df.merge(bc_df, on="restaurant_id")
+    # FIXME Do something other than average the values across matching restaurant IDs?
+    # This works because the only non-numeric fields are restaurant_id and business_id.
+    # business_id was the previous index, so it is not considered a normal column.
+    # restaurant_id becomes the new index after grouping, so it is also not a normal column.
+    business_data = business_data.groupby('restaurant_id', sort=False).mean()
+    checkin_data = checkin_data.groupby('restaurant_id', sort=False).mean()
 
-    # TODO other things
+    # Sum the TFIDF features for everything that comes before in time for a given tip or review
+    tip_data.drop(['business_id', 'text'], axis=1, inplace=True)
+    review_data.drop(['business_id', 'text'], axis=1, inplace=True)
 
-    # output
-    df.to_csv("processed_data/joined_data.csv", index=False)
-    wabbit_it(df)
+    # Finally, join everything
+    training_data = create_evaluation_data(business_data, checkin_data, tip_data, review_data,
+                                           tip_features, review_features, training_data)
+    training_data.to_csv("processed_data/training_data.csv", index="id")
+
+    # TODO submit data and wabbit_it!
 
     return
 
