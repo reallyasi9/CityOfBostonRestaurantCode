@@ -1,5 +1,10 @@
 from numpy import argsort
 import pandas as pd
+import datetime
+import time
+import calendar
+import nltk
+from nltk.corpus import wordnet
 
 # a simple way to create a "document" for an inspection is to
 # concatenate all the reviews that happened before the inspection date
@@ -76,3 +81,36 @@ def build_restaurant_id_map(csvfile):
             id_dict[yelp_id] = boston_id
 
     return id_dict
+
+def hour_to_seconds(hour):
+    if hour is None or hour != hour:
+        return -1
+    x = time.strptime(hour, '%H:%M')
+    return datetime.timedelta(hours=x.tm_hour, minutes=x.tm_min, seconds=x.tm_sec).total_seconds()
+
+def date_to_seconds(text):
+    if text is None or text != text:
+        return -1
+    x = time.strptime(text, '%Y-%m-%d')
+    return calendar.timegm(x)
+
+def get_wordnet_pos(treebank_tag):
+
+    if treebank_tag.startswith('J'):
+        return wordnet.ADJ
+    elif treebank_tag.startswith('V'):
+        return wordnet.VERB
+    elif treebank_tag.startswith('N'):
+        return wordnet.NOUN
+    elif treebank_tag.startswith('R'):
+        return wordnet.ADV
+    else:
+        return wordnet.NOUN # TODO something smarter
+
+def pos_and_lemmatize(text, lemmatizer, spell_checker):
+    words = nltk.word_tokenize(text.encode('ascii', 'ignore'))
+    # words = [x.encode('ascii', 'ignore') for x in words]
+    # words = [spell_checker.correct(x.lower()) for x in words]
+    pos = nltk.pos_tag(words)
+    print(pos)
+    return [lemmatizer.lemmatize(w, pos=get_wordnet_pos(p)) for (w, p) in pos]

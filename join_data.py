@@ -4,15 +4,6 @@ import flatten_data
 import functions
 import pandas as pd
 import numpy as np
-import time
-import calendar
-
-# Set hours to seconds from midnight
-def date_to_seconds(text):
-    if text is None or text != text:
-        return -1
-    x = time.strptime(text, '%Y-%m-%d')
-    return calendar.timegm(x)
 
 def wabbit_it(df):
     ignored_columns = ['id', 'name', '*', '**', '***', 'full_address', 'city']

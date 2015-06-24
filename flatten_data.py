@@ -1,13 +1,15 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
+from sklearn.feature_extraction.text import TfidfVectorizer
 
+import functions
 import json
 import pandas as pd
-import datetime
-import time
-# import numpy as np
 import re
 from itertools import chain
+from spellcheck import SpellChecker
+from nltk.stem import WordNetLemmatizer
+
 
 def flatten(structure, key="", path="", flattened=None):
     """
@@ -56,7 +58,6 @@ def flatten_business_data(jsonfile):
     """ Construct a pandas 2D dataset from the businesses json
 
     :param jsonfile: The name of the file to parse
-    :param yelp_to_boston_ids: A dict that maps from yelp IDs to Boston IDs
     :return: A 2D pandas dataset with all fields from the JSON file flattened in a standard way.
     """
     # Load json as an array of dicts
@@ -88,18 +89,12 @@ def flatten_business_data(jsonfile):
     # df.dropna(axis=0, subset=['restaurant_id'], inplace=True)
 
     # Set hours to seconds from midnight
-    def hour_to_seconds(hour):
-        if hour is None or hour != hour:
-            return -1
-        x = time.strptime(hour, '%H:%M')
-        return datetime.timedelta(hours=x.tm_hour, minutes=x.tm_min, seconds=x.tm_sec).total_seconds()
-
     time_cols = []
     for d in ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']:
         for e in ['open', 'close']:
             col = 'hours.' + d + '.' + e
             time_cols += [col]
-            df.ix[:, col] = df.ix[:, col].apply(hour_to_seconds).astype('int32')
+            df.ix[:, col] = df.ix[:, col].apply(functions.hour_to_seconds).astype('int32')
 
         nonsense = df['hours.' + d + '.close'] <= df['hours.' + d + '.open']
         df.ix[nonsense, 'hours.' + d + '.close'] += 24 * 3600
@@ -179,41 +174,59 @@ def flatten_checkin_data(jsonfile):
     return df
 
 
-# def flatten_tip_data(jsonfile):
-#     """ Construct a pandas 2D dataset from the tip json
-#
-#     :param jsonfile: The name of the file to parse
-#     :return: A 2D pandas dataset with all fields from the JSON file flattened in a standard way.
-#     """
-#     # Load json as an array of dicts
-#     with open(jsonfile) as jfile:
-#         js = '[' + ','.join(jfile.readlines()) + ']'
-#
-#     jd = json.loads(js)
-#
-#     # Flatten json:
-#
-#     flattened_json = []
-#     for obj in jd:
-#         json_obj = flatten(obj)
-#         flattened_json.append(json_obj)
-#
-#     # Now actually build out the dataset
-#     df = pd.DataFrame(flattened_json)
-#
-#     # Convert columns to explicit types
-#     not_integer_types = ['type', 'business_id']
-#
-#     # Everything else is an integer
-#     for col in df.columns:
-#         if col not in not_integer_types:
-#             df.loc[:, col] = df.loc[:, col].fillna(0)
-#             df[col] = df[col].astype('int32')
-#
-#     # And get rid of useless columns
-#     df.drop(['type'], inplace=True, axis=1)
-#
-#     return df
+class LemmaTokenizer(object):
+    """
+    This is a class to tokenize using WordNet Lemmatizer
+    for use with TFIDF Vectorizer.
+    """
+
+    def __init__(self):
+        self.wnl = WordNetLemmatizer()
+        self.sc = SpellChecker()
+
+    def __call__(self, doc):
+        return functions.pos_and_lemmatize(doc, self.wnl, self.sc)
+
+
+def flatten_tip_data(jsonfile):
+    """ Construct a pandas 2D dataset from the tip json
+
+    :param jsonfile: The name of the file to parse
+    :return: A 2D pandas dataset with all fields from the JSON file flattened in a standard way.
+    """
+    # Load json as an array of dicts
+    with open(jsonfile) as jfile:
+        js = '[' + ','.join(jfile.readlines()) + ']'
+
+    jd = json.loads(js)
+
+    # Flatten json:
+
+    flattened_json = []
+    for obj in jd:
+        json_obj = flatten(obj)
+        flattened_json.append(json_obj)
+
+    # Now actually build out the dataset
+    df = pd.DataFrame(flattened_json)
+
+    vectorizer = TfidfVectorizer(stop_words='english',
+                                 decode_error='replace',
+                                 analyzer='word',
+                                 ngram_range=(1, 2),
+                                 max_features=500,
+                                 tokenizer=LemmaTokenizer())
+
+    tx_data = vectorizer.fit_transform(df['text'])
+    tx_data = pd.DataFrame(tx_data.todense)
+    tx_data.columns = vectorizer.get_feature_names()
+    tx_data.add_prefix('f.')
+    df = pd.concat([df, tx_data], axis=1)
+
+    # And get rid of useless columns
+    df.drop(['type'], inplace=True, axis=1)
+
+    return df
 
 
 def main():
@@ -223,8 +236,8 @@ def main():
     business_data.to_csv("processed_data/business_data.csv", index=False)
     checkin_data = flatten_checkin_data('data/yelp_academic_dataset_checkin.json')
     checkin_data.to_csv("processed_data/checkin_data.csv", index=False)
-    # tip_data = flatten_tip_data('data/yelp_academic_dataset_tip.json')
-    # tip_data.to_csv("processed_data/tip_data.csv", index=False)
+    tip_data = flatten_tip_data('data/yelp_academic_dataset_tip.json')
+    tip_data.to_csv("processed_data/tip_data.csv", index=False)
 
     # TODO continue flattening things!
 
