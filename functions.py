@@ -5,6 +5,7 @@ import time
 import calendar
 import nltk
 from nltk.corpus import wordnet
+from enchant import tokenize, checker
 
 # a simple way to create a "document" for an inspection is to
 # concatenate all the reviews that happened before the inspection date
@@ -107,10 +108,15 @@ def get_wordnet_pos(treebank_tag):
     else:
         return wordnet.NOUN # TODO something smarter
 
-def pos_and_lemmatize(text, lemmatizer, spell_checker):
-    words = nltk.word_tokenize(text.encode('ascii', 'ignore'))
-    # words = [x.encode('ascii', 'ignore') for x in words]
-    # words = [spell_checker.correct(x.lower()) for x in words]
+def pos_and_lemmatize(text, lemmatizer):
+    sc = checker.SpellChecker('en_US', text)
+    for err in sc:
+        try:
+            err.replace(err.suggest()[0])
+        except IndexError:
+            pass
+    tokenizer = tokenize.get_tokenizer('en_US')
+    words = [w[0].encode('ascii', 'ignore').decode('utf-8') for w in tokenizer(text)]
     pos = nltk.pos_tag(words)
-    print(pos)
-    return [lemmatizer.lemmatize(w, pos=get_wordnet_pos(p)) for (w, p) in pos]
+    lemmas = [lemmatizer.lemmatize(w, pos=get_wordnet_pos(p)) for (w, p) in pos]
+    return lemmas

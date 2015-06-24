@@ -1,14 +1,14 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
-from sklearn.feature_extraction.text import TfidfVectorizer
-
-import functions
 import json
-import pandas as pd
 import re
 from itertools import chain
-from spellcheck import SpellChecker
+from utilities import Timer
+from sklearn.feature_extraction.text import TfidfVectorizer
+import pandas as pd
 from nltk.stem import WordNetLemmatizer
+
+import functions
 
 
 def flatten(structure, key="", path="", flattened=None):
@@ -182,10 +182,9 @@ class LemmaTokenizer(object):
 
     def __init__(self):
         self.wnl = WordNetLemmatizer()
-        self.sc = SpellChecker()
 
     def __call__(self, doc):
-        return functions.pos_and_lemmatize(doc, self.wnl, self.sc)
+        return functions.pos_and_lemmatize(doc, self.wnl)
 
 
 def flatten_tip_data(jsonfile):
@@ -218,9 +217,9 @@ def flatten_tip_data(jsonfile):
                                  tokenizer=LemmaTokenizer())
 
     tx_data = vectorizer.fit_transform(df['text'])
-    tx_data = pd.DataFrame(tx_data.todense)
-    tx_data.columns = vectorizer.get_feature_names()
-    tx_data.add_prefix('f.')
+    tx_data = pd.DataFrame(tx_data.todense())
+    no_word_re = re.compile('\W+')
+    tx_data.columns = ['t.' + no_word_re.sub('_', x) for x in vectorizer.get_feature_names()]
     df = pd.concat([df, tx_data], axis=1)
 
     # And get rid of useless columns
@@ -228,16 +227,101 @@ def flatten_tip_data(jsonfile):
 
     return df
 
+def flatten_review_data(jsonfile):
+    """ Construct a pandas 2D dataset from the tip json
+
+    :param jsonfile: The name of the file to parse
+    :return: A 2D pandas dataset with all fields from the JSON file flattened in a standard way.
+    """
+    # Load json as an array of dicts
+    with open(jsonfile) as jfile:
+        js = '[' + ','.join(jfile.readlines()) + ']'
+
+    jd = json.loads(js)
+
+    # Flatten json:
+
+    flattened_json = []
+    for obj in jd:
+        json_obj = flatten(obj)
+        flattened_json.append(json_obj)
+
+    # Now actually build out the dataset
+    df = pd.DataFrame(flattened_json)
+
+    vectorizer = TfidfVectorizer(stop_words='english',
+                                 decode_error='replace',
+                                 analyzer='word',
+                                 ngram_range=(1, 3),
+                                 max_features=1000,
+                                 tokenizer=LemmaTokenizer())
+
+    tx_data = vectorizer.fit_transform(df['text'])
+    tx_data = pd.DataFrame(tx_data.todense())
+    no_word_re = re.compile('\W+')
+    tx_data.columns = ['r.' + no_word_re.sub('_', x) for x in vectorizer.get_feature_names()]
+    df = pd.concat([df, tx_data], axis=1)
+
+    # And get rid of useless columns
+    df.drop(['type'], inplace=True, axis=1)
+
+    # And convert date to seconds
+    df.ix[:, 'date'] = df.ix[:, 'date'].apply(functions.date_to_seconds).astype('int32')
+
+    return df
 
 def main():
     # TODO Handle options for input/output
     # TODO Add flags to determine what gets read
+    sw = Timer()
+    print("Flattening business data")
+    sw.start()
     business_data = flatten_business_data('data/yelp_academic_dataset_business.json')
+    sw.stop()
+    print("Time: %f" % sw.elapsed)
+    sw.reset()
+    print("Outputting business data")
+    sw.start()
     business_data.to_csv("processed_data/business_data.csv", index=False)
+    sw.stop()
+    print("Time: %f" % sw.elapsed)
+    sw.reset()
+    print("Flattening check in data")
+    sw.start()
     checkin_data = flatten_checkin_data('data/yelp_academic_dataset_checkin.json')
+    sw.stop()
+    print("Time: %f" % sw.elapsed)
+    sw.reset()
+    print("Outputting check in data")
+    sw.start()
     checkin_data.to_csv("processed_data/checkin_data.csv", index=False)
+    sw.stop()
+    print("Time: %f" % sw.elapsed)
+    sw.reset()
+    print("Flattening tip data")
+    sw.start()
     tip_data = flatten_tip_data('data/yelp_academic_dataset_tip.json')
+    sw.stop()
+    print("Time: %f" % sw.elapsed)
+    sw.reset()
+    print("Outputting tip data")
+    sw.start()
     tip_data.to_csv("processed_data/tip_data.csv", index=False)
+    sw.stop()
+    print("Time: %f" % sw.elapsed)
+    sw.reset()
+    print("Flattening review data")
+    sw.start()
+    review_data = flatten_review_data('data/yelp_academic_dataset_review.json')
+    sw.stop()
+    print("Time: %f" % sw.elapsed)
+    sw.reset()
+    print("Outputting review data")
+    sw.start()
+    review_data.to_csv("processed_data/review_data.csv", index=False)
+    sw.stop()
+    print("Time: %f" % sw.elapsed)
+    sw.reset()
 
     # TODO continue flattening things!
 
