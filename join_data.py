@@ -15,7 +15,7 @@ class Closest(object):
     data = pd.DataFrame()
     cols = []
     bar = None
-    ticks = 0
+    # tick = 0
 
     def __init__(self, df, cols, max_lines):
         self.data = df
@@ -24,6 +24,9 @@ class Closest(object):
                        suffix='%(percent)d%% (%(index)d/%(max)d), %(avg).3f sec/row, ETA %(eta_td)s', max=max_lines)
 
     def __call__(self, row):
+        # self.tick += 1
+        # if self.tick % 100 == 0:
+        self.bar.next(100)
         found = self.data[(self.data.restaurant_id == row.restaurant_id) & (self.data.date <= row.date)]
         if found.shape[0] == 0:
             # FIXME Do something smarter than averaging?
@@ -33,9 +36,6 @@ class Closest(object):
         # FIXME Sometimes NaNs appear if I am missing the restaurant ID.  What to do?
         found.fillna(0, inplace=True)
         row[self.cols] = found
-        self.ticks += 1
-        if self.ticks % 100 == 0:
-            self.bar.next(100)
         return row
 
     def __del__(self):
