@@ -225,6 +225,9 @@ def flatten_tip_data(jsonfile):
     # And get rid of useless columns
     df.drop(['type'], inplace=True, axis=1)
 
+    # And convert date to seconds
+    df.ix[:, 'date'] = df.ix[:, 'date'].apply(functions.date_to_seconds).astype('int32')
+
     return df
 
 def flatten_review_data(jsonfile):

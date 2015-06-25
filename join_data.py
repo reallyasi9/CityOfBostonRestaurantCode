@@ -73,8 +73,11 @@ def main():
     checkin_data = checkin_data.groupby('restaurant_id', sort=False).mean()
 
     # Sum the TFIDF features for everything that comes before in time for a given tip or review
-    tip_data.drop(['business_id', 'text'], axis=1, inplace=True)
-    review_data.drop(['business_id', 'text'], axis=1, inplace=True)
+    # FIXME maybe don't drop userid?
+    tip_data.set_index('restaurant_id', inplace=True)
+    tip_data.drop(['business_id', 'user_id', 'text'], axis=1, inplace=True)
+    review_data.set_index('restaurant_id', inplace=True)
+    review_data.drop(['business_data', 'text'], axis=1, inplace=True)
 
     # Finally, join everything
     training_data = create_evaluation_data(business_data, checkin_data, tip_data, review_data,
