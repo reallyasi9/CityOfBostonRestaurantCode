@@ -4,20 +4,22 @@ import re
 import functions
 import pandas as pd
 import numpy as np
+from progress.bar import Bar
 
 
 def wabbit_it(business_data, checkin_data, tip_data, review_data, training_data, df):
     return
 
 
-class Closest:
+class Closest(object):
     data = pd.DataFrame()
     cols = []
+    bar = None
 
     def __init__(self, df, cols):
         self.data = df
         self.cols = cols
-        return
+        self.bar = Bar('Compressing Time', suffix='%(percent)d%%, %(avg)d/sec, ETA %(eta_td)s', max=df.shape[0])
 
     def __call__(self, row):
         found = self.data[(self.data.restaurant_id == row.restaurant_id) & (self.data.date <= row.date)]
@@ -29,7 +31,11 @@ class Closest:
         # FIXME Sometimes NaNs appear if I am missing the restaurant ID.  What to do?
         found.fillna(0, inplace=True)
         row[self.cols] = found
+        self.bar.next()
         return row
+
+    def __del__(self):
+        self.bar.finish()
 
 
 def create_evaluation_data(business_data, checkin_data, tip_data, review_data, tip_features, review_features,
@@ -50,9 +56,9 @@ def create_evaluation_data(business_data, checkin_data, tip_data, review_data, t
 def main():
     business_data = pd.DataFrame.from_csv('processed_data/business_data.csv', index_col="business_id")
     checkin_data = pd.DataFrame.from_csv('processed_data/checkin_data.csv', index_col="business_id")
-    tip_data = pd.SparseDataFrame.from_csv('processed_data/tip_data.csv')
-    review_data = pd.SparseDataFrame.from_csv('processed_data/review_data.csv')
-    training_data = pd.read_csv('data/train_labels.csv')
+    tip_data = pd.DataFrame.from_csv('processed_data/tip_data.csv').to_sparse(fill_value=0)
+    review_data = pd.DataFrame.from_csv('processed_data/review_data.csv').to_sparse(fill_value=0)
+    training_data = pd.DataFrame.read_csv('data/train_labels.csv')
 
     # Convert training date to seconds for easier maths
     training_data.ix[:, 'date'] = training_data.ix[:, 'date'].apply(functions.date_to_seconds).astype('int32')

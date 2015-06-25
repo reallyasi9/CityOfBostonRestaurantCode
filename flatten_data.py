@@ -9,6 +9,7 @@ import pandas as pd
 from nltk.stem import WordNetLemmatizer
 
 import functions
+from progress.bar import Bar
 
 
 def flatten(structure, key="", path="", flattened=None):
@@ -159,14 +160,8 @@ def flatten_checkin_data(jsonfile):
     # Now actually build out the dataset
     df = pd.DataFrame(flattened_json)
 
-    # Convert columns to explicit types
-    not_integer_types = ['type', 'business_id']
-
     # Everything else is an integer
-    for col in df.columns:
-        if col not in not_integer_types:
-            df.loc[:, col] = df.loc[:, col].fillna(0)
-            # df[col] = df[col].astype('int32')
+    df.fillna(0, inplace=True)
 
     # And get rid of useless columns
     df.drop(['type'], inplace=True, axis=1)
@@ -180,11 +175,20 @@ class LemmaTokenizer(object):
     for use with TFIDF Vectorizer.
     """
 
-    def __init__(self):
+    def __init__(self, size=None):
         self.wnl = WordNetLemmatizer()
+        self.size = size
+        self.bar = None
+        if size is not None:
+            self.bar = Bar('Lemmatizing', suffix='%(percent)d%%, %(avg)d/sec, ETA %(eta_td)s', max=self.size)
 
     def __call__(self, doc):
+        if self.size is not None:
+            self.bar.next()
         return functions.pos_and_lemmatize(doc, self.wnl)
+
+    def __del__(self):
+        self.bar.finish()
 
 
 def flatten_tip_data(jsonfile):
