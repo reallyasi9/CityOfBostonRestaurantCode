@@ -15,11 +15,13 @@ class Closest(object):
     data = pd.DataFrame()
     cols = []
     bar = None
+    ticks = 0
 
     def __init__(self, df, cols):
         self.data = df
         self.cols = cols
-        self.bar = Bar('Compressing Time', suffix='%(percent)d%%, %(avg)d/sec, ETA %(eta_td)s', max=df.shape[0])
+        self.bar = Bar('Compressing Time',
+                       suffix='%(percent)d%% (%(index)d/%(max)d), %(avg).3f sec/row, ETA %(eta_td)s', max=df.shape[0])
 
     def __call__(self, row):
         found = self.data[(self.data.restaurant_id == row.restaurant_id) & (self.data.date <= row.date)]
@@ -31,7 +33,9 @@ class Closest(object):
         # FIXME Sometimes NaNs appear if I am missing the restaurant ID.  What to do?
         found.fillna(0, inplace=True)
         row[self.cols] = found
-        self.bar.next()
+        self.ticks += 100
+        if self.ticks % 100 == 0:
+            self.bar.next(100)
         return row
 
     def __del__(self):

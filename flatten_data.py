@@ -174,17 +174,21 @@ class LemmaTokenizer(object):
     This is a class to tokenize using WordNet Lemmatizer
     for use with TFIDF Vectorizer.
     """
+    wnl = WordNetLemmatizer()
+    size = None
+    bar = None
+    tick = 0
 
     def __init__(self, size=None):
-        self.wnl = WordNetLemmatizer()
         self.size = size
-        self.bar = None
-        if size is not None:
-            self.bar = Bar('Lemmatizing', suffix='%(percent)d%%, %(avg)d/sec, ETA %(eta_td)s', max=self.size)
+        if self.size is not None:
+            self.bar = Bar('Lemmatizing', suffix='%(percent)d%% (%(index)d/%(max)d), %(avg).3f sec/row, ETA %(eta_td)s',
+                           max=self.size)
 
     def __call__(self, doc):
-        if self.size is not None:
-            self.bar.next()
+        self.tick += 1
+        if self.size is not None and self.tick % 100 == 0:
+            self.bar.next(100)
         return functions.pos_and_lemmatize(doc, self.wnl)
 
     def __del__(self):
@@ -218,7 +222,7 @@ def flatten_tip_data(jsonfile):
                                  analyzer='word',
                                  ngram_range=(1, 2),
                                  max_features=500,
-                                 tokenizer=LemmaTokenizer())
+                                 tokenizer=LemmaTokenizer(df.shape[0]))
 
     tx_data = vectorizer.fit_transform(df['text'])
     tx_data = pd.DataFrame(tx_data.todense())
@@ -233,6 +237,7 @@ def flatten_tip_data(jsonfile):
     df.ix[:, 'date'] = df.ix[:, 'date'].apply(functions.date_to_seconds).astype('int32')
 
     return df
+
 
 def flatten_review_data(jsonfile):
     """ Construct a pandas 2D dataset from the tip json
@@ -261,7 +266,7 @@ def flatten_review_data(jsonfile):
                                  analyzer='word',
                                  ngram_range=(1, 3),
                                  max_features=1000,
-                                 tokenizer=LemmaTokenizer())
+                                 tokenizer=LemmaTokenizer(df.shape[0]))
 
     tx_data = vectorizer.fit_transform(df['text'])
     tx_data = pd.DataFrame(tx_data.todense())
@@ -276,6 +281,7 @@ def flatten_review_data(jsonfile):
     df.ix[:, 'date'] = df.ix[:, 'date'].apply(functions.date_to_seconds).astype('int32')
 
     return df
+
 
 def main():
     # TODO Handle options for input/output
