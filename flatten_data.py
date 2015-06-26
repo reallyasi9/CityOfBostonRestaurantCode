@@ -3,13 +3,13 @@
 import json
 import re
 from itertools import chain
-from utilities import Timer
+
 from sklearn.feature_extraction.text import TfidfVectorizer
 import pandas as pd
 from nltk.stem import WordNetLemmatizer
+from progress.bar import Bar
 
 import functions
-from progress.bar import Bar
 
 
 def flatten(structure, key="", path="", flattened=None):
@@ -108,10 +108,9 @@ def flatten_business_data(jsonfile):
                      'attributes.BYOB/Corkage',
                      'attributes.Noise Level',
                      'attributes.Price Range',
-                     'attributes.Wi-Fi',
-                     'stars'],
+                     'attributes.Wi-Fi'],
         'int32': ['review_count'] + time_cols,
-        'float32': ['latitude', 'longitude']
+        'float32': ['latitude', 'longitude', 'stars']
     }
     for typ, cols in col_types.items():
         for col in cols:
@@ -133,7 +132,7 @@ def flatten_business_data(jsonfile):
     df['name'] = df['name'].map(lambda x: x.encode('ascii', 'ignore'))
 
     # And get rid of useless columns
-    df.drop(['type', 'state'], inplace=True, axis=1)
+    df.drop(['type', 'state', 'full_address'], inplace=True, axis=1)
 
     return df
 
@@ -160,7 +159,7 @@ def flatten_checkin_data(jsonfile):
     # Now actually build out the dataset
     df = pd.DataFrame(flattened_json)
 
-    # Everything else is an integer
+    # Fill NA, which are actually zeros
     df.fillna(0, inplace=True)
 
     # And get rid of useless columns

@@ -6,22 +6,17 @@ import pandas as pd
 import numpy as np
 from progress.bar import Bar
 
-
-def wabbit_it(business_data, checkin_data, tip_data, review_data, training_data, df):
-    return
-
-
 class Closest(object):
     data = pd.DataFrame()
     cols = []
     bar = None
-    # tick = 0
 
-    def __init__(self, df, cols, max_lines):
+    def __init__(self, df, cols, size):
         self.data = df
         self.cols = cols
-        self.bar = Bar('Compressing Time',
-                       suffix='%(percent)d%% (%(index)d/%(max)d), %(avg).3f sec/row, ETA %(eta_td)s', max=max_lines)
+        self.bar = Bar(message="Compressing Time", max=size,
+                       suffix="%(percent)d%% (%(index)d/%(max)d) ETA %(eta_td)s")
+        return
 
     def __call__(self, row):
         self.tick += 1
@@ -109,8 +104,6 @@ def main():
     submission_data_2 = create_evaluation_data(business_data, checkin_data, tip_data, review_data,
                                                tip_features, review_features, submission_data_2)
     submission_data_2.to_csv("processed_data/phase2_data.csv", index=None)
-
-    # TODO wabbit_it!
 
     return
 
