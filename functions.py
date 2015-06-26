@@ -4,8 +4,9 @@ import datetime
 import time
 import calendar
 import nltk
+from nltk.tokenize import word_tokenize
 from nltk.corpus import wordnet
-from enchant import tokenize, checker
+import csv
 
 # a simple way to create a "document" for an inspection is to
 # concatenate all the reviews that happened before the inspection date
@@ -40,47 +41,18 @@ def flatten_reviews(label_df, reviews):
     return reviews_dictionary
 
 
-def get_top_features(features, model, level, limit, bottom=False):
-    """ Get the top (most likely to see violations) and bottom (least
-        likely to see violations) features for a given model.
-
-        :param features: an array of the feature names
-        :param model: a fitted linear regression model
-        :param level: 0, 1, 2 for *, **, *** violation levels
-        :param limit: how many features to return
-        :param bottom: if we want the bottom features rather than the top
-    """
-    # sort order for the coefficients
-    sorted_coeffs = argsort(model.coef_[level])
-
-    if bottom:
-        # get the features at the end of the sorted list
-        return features[sorted_coeffs[-1 * limit:]]
-    else:
-        # get the features at the beginning of the sorted list
-        return features[sorted_coeffs[:limit]]
-
-
 def build_restaurant_id_map(csvfile):
     """ Build a map between Boston ID and Yelp ID
         :param csvfile: A CSV file containing Boston-to-Yelp ID mappings
         :return a dict containing a mapping between Boston ID and Yelp ID
     """
-    id_map = pd.read_csv(csvfile)
     id_dict = {}
-
-    # each Yelp ID may correspond to up to 4 Boston IDs
-    for i, row in id_map.iterrows():
-        # get the Boston ID
-        boston_id = row["restaurant_id"]
-
-        # get the non-null Yelp IDs
-        non_null_mask = ~pd.isnull(row.ix[1:])
-        yelp_ids = row[1:][non_null_mask].values
-
-        for yelp_id in yelp_ids:
-            id_dict[yelp_id] = boston_id
-
+    with open(csvfile, 'r') as f:
+        linereader = csv.reader(f)
+        for row in linereader:
+            for e in row[1:]:
+                if e != '':
+                    id_dict[e] = row[0]
     return id_dict
 
 def hour_to_seconds(hour):
@@ -109,14 +81,7 @@ def get_wordnet_pos(treebank_tag):
         return wordnet.NOUN # TODO something smarter
 
 def pos_and_lemmatize(text, lemmatizer):
-    sc = checker.SpellChecker('en_US', text)
-    for err in sc:
-        try:
-            err.replace(err.suggest()[0])
-        except IndexError:
-            pass
-    tokenizer = tokenize.get_tokenizer('en_US')
-    words = [w[0].encode('ascii', 'ignore').decode('utf-8') for w in tokenizer(text)]
+    words = [w.encode('ascii', 'ignore').decode('utf-8') for w in word_tokenize(text)]
     pos = nltk.pos_tag(words)
     lemmas = [lemmatizer.lemmatize(w, pos=get_wordnet_pos(p)) for (w, p) in pos]
     return lemmas

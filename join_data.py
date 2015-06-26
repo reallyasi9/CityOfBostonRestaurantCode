@@ -24,9 +24,9 @@ class Closest(object):
                        suffix='%(percent)d%% (%(index)d/%(max)d), %(avg).3f sec/row, ETA %(eta_td)s', max=max_lines)
 
     def __call__(self, row):
-        # self.tick += 1
-        # if self.tick % 100 == 0:
-        self.bar.next(100)
+        self.tick += 1
+        if self.tick % 100 == 0:
+            self.bar.next(100)
         found = self.data[(self.data.restaurant_id == row.restaurant_id) & (self.data.date <= row.date)]
         if found.shape[0] == 0:
             # FIXME Do something smarter than averaging?
@@ -37,9 +37,6 @@ class Closest(object):
         found.fillna(0, inplace=True)
         row[self.cols] = found
         return row
-
-    def __del__(self):
-        self.bar.finish()
 
 
 def create_evaluation_data(business_data, checkin_data, tip_data, review_data, tip_features, review_features,
