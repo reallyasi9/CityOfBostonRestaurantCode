@@ -3,6 +3,9 @@ import functions
 import pandas as pd
 import numpy as np
 import review_lagger
+import getopt
+import sys
+
 
 def create_evaluation_data(inspection_data, tip_data, review_data, target_data):
     lagger = review_lagger.Lagger(inspection_data, review_data, tip_data, size=target_data.shape[0])
@@ -10,12 +13,44 @@ def create_evaluation_data(inspection_data, tip_data, review_data, target_data):
     return df
 
 
-def main():
-    tip_data = pd.DataFrame.from_csv('processed_data/tip_data.csv', index_col=None)
-    review_data = pd.DataFrame.from_csv('processed_data/review_data.csv', index_col=None)
+def main(argv):
+    tip_file = 'processed_data/tip_data.csv'
+    review_file = 'processed_data/review_data.csv'
+    train_file = 'data/train_labels.csv'
+    in_files = ['data/train_labels.csv', 'data/SubmissionFormat.csv', 'data/PhaseIISubmissionFormat.csv']
+    out_files = ["processed_data/training_data_raw.csv", "processed_data/submission_data_raw.csv",
+                 "processed_data/phase2_data_raw.csv"]
+    yelp_id_file = "data/restaurant_ids_to_yelp_ids.csv"
+
+    try:
+        opts, args = getopt.getopt(argv, "t:r:a:y:i:r:",
+                                   ["tip_file=", "review_file=", "train_file=", "yelp_file=", "in_file=",
+                                    "out_file="])
+    except getopt.GetoptError as err:
+        print(err)
+        sys.exit(1)
+
+    for o, a in opts:
+        if o in ("-t", "--tip_file"):
+            tip_file = a
+        elif o in ("-r", "--review_file"):
+            review_file = a
+        elif o in ("-a", "--train_file"):
+            train_file = a
+        elif o in ("-y", "--yelp_file"):
+            yelp_id_file = a
+        elif o in ("-i", "--in_file"):
+            in_files = [a]
+        elif o in ("-o", "--out_file"):
+            out_files = [a]
+        else:
+            assert False, "unhandled option " + o
+
+    tip_data = pd.DataFrame.from_csv(tip_file, index_col=None)
+    review_data = pd.DataFrame.from_csv(review_file, index_col=None)
 
     # Add restaurant IDs to everything
-    id_dict = functions.build_restaurant_id_map('data/restaurant_ids_to_yelp_ids.csv')
+    id_dict = functions.build_restaurant_id_map(yelp_id_file)
     map_to_boston_ids = lambda yid: id_dict[yid] if yid in id_dict else np.nan
 
     for df in [tip_data, review_data]:
@@ -27,30 +62,19 @@ def main():
         df.sortlevel(0, inplace=True)
 
     # Finally, join everything
-    training_data = pd.DataFrame.from_csv('data/train_labels.csv', index_col=None)
+    training_data = pd.DataFrame.from_csv(train_file, index_col=None)
     training_data.ix[:, 'date'] = training_data.ix[:, 'date'].apply(functions.date_to_seconds).astype('int32')
     training_data.set_index(['restaurant_id', 'date'], inplace=True)
     training_data.sortlevel(0, inplace=True)
-    train_out = create_evaluation_data(training_data, tip_data, review_data, training_data)
-    train_out.to_csv("processed_data/training_data_raw.csv", index=None)
 
-    # And join the submission data
-    submission_data_1 = pd.from_csv('data/SubmissionFormat.csv', index_col=None)
-    submission_data_1.ix[:, 'date'] = submission_data_1.ix[:, 'date'].apply(functions.date_to_seconds).astype('int32')
-    submission_data_1.set_index(['restaurant_id', 'date'], inplace=True)
-    submission_data_1.sortlevel(0, inplace=True)
-    submission_data_1 = create_evaluation_data(training_data, tip_data, review_data, submission_data_1)
-    submission_data_1.to_csv("processed_data/submission_data_raw.csv", index=None)
-
-    submission_data_2 = pd.from_csv('data/PhaseIISubmissionFormat.csv', index_col=None)
-    submission_data_2.ix[:, 'date'] = submission_data_2.ix[:, 'date'].apply(functions.date_to_seconds).astype('int32')
-    submission_data_2.set_index(['restaurant_id', 'date'], inplace=True)
-    submission_data_2.sortlevel(0, inplace=True)
-    submission_data_2 = create_evaluation_data(training_data, tip_data, review_data, submission_data_2)
-    submission_data_2.to_csv("processed_data/phase2_data_raw.csv", index=None)
+    for n, fn in enumerate(in_files):
+        in_data = pd.DataFrame.from_csv(fn, index_col=None)
+        in_data.ix[:, 'date'] = in_data.ix[:, 'date'].apply(functions.date_to_seconds).astype('int32')
+        out = create_evaluation_data(training_data, tip_data, review_data, in_data)
+        out.to_csv(out_files[n], index=None)
 
     return
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1:])
