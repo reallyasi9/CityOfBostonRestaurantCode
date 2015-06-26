@@ -107,10 +107,9 @@ def flatten_business_data(jsonfile):
                      'attributes.BYOB/Corkage',
                      'attributes.Noise Level',
                      'attributes.Price Range',
-                     'attributes.Wi-Fi',
-                     'stars'],
+                     'attributes.Wi-Fi'],
         'int32': ['review_count'] + time_cols,
-        'float32': ['latitude', 'longitude']
+        'float32': ['latitude', 'longitude', 'stars']
     }
     for typ, cols in col_types.items():
         for col in cols:
@@ -132,7 +131,7 @@ def flatten_business_data(jsonfile):
     df['name'] = df['name'].map(lambda x: x.encode('ascii', 'ignore'))
 
     # And get rid of useless columns
-    df.drop(['type', 'state'], inplace=True, axis=1)
+    df.drop(['type', 'state', 'full_address'], inplace=True, axis=1)
 
     return df
 
@@ -159,14 +158,8 @@ def flatten_checkin_data(jsonfile):
     # Now actually build out the dataset
     df = pd.DataFrame(flattened_json)
 
-    # Convert columns to explicit types
-    not_integer_types = ['type', 'business_id']
-
-    # Everything else is an integer
-    for col in df.columns:
-        if col not in not_integer_types:
-            df.loc[:, col] = df.loc[:, col].fillna(0)
-            # df[col] = df[col].astype('int32')
+    # Fill NA, which are actually zeros
+    df.fillna(0, inplace=True)
 
     # And get rid of useless columns
     df.drop(['type'], inplace=True, axis=1)
@@ -230,6 +223,7 @@ def flatten_tip_data(jsonfile):
 
     return df
 
+
 def flatten_review_data(jsonfile):
     """ Construct a pandas 2D dataset from the tip json
 
@@ -272,6 +266,7 @@ def flatten_review_data(jsonfile):
     df.ix[:, 'date'] = df.ix[:, 'date'].apply(functions.date_to_seconds).astype('int32')
 
     return df
+
 
 def main():
     # TODO Handle options for input/output

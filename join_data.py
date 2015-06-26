@@ -4,22 +4,22 @@ import re
 import functions
 import pandas as pd
 import numpy as np
-
-
-def wabbit_it(business_data, checkin_data, tip_data, review_data, training_data, df):
-    return
-
+from progress.bar import Bar
 
 class Closest:
     data = pd.DataFrame()
     cols = []
+    bar = None
 
-    def __init__(self, df, cols):
+    def __init__(self, df, cols, size):
         self.data = df
         self.cols = cols
+        self.bar = Bar(message="Compressing Time", max=size,
+                       suffix="%(percent)d%% (%(index)d/%(max)d) ETA %(eta_td)s")
         return
 
     def __call__(self, row):
+        self.bar.next()
         found = self.data[(self.data.restaurant_id == row.restaurant_id) & (self.data.date <= row.date)]
         if found.shape[0] == 0:
             # FIXME Do something smarter than averaging?
@@ -36,10 +36,10 @@ def create_evaluation_data(business_data, checkin_data, tip_data, review_data, t
                            target_data):
     df = target_data.copy()
     bc_df = business_data.join(checkin_data)
-    closest_tip = Closest(tip_data, tip_features)
+    closest_tip = Closest(tip_data, tip_features, df.shape[0])
     df = pd.concat([df, pd.DataFrame(np.zeros((df.shape[0], len(tip_features))), columns=tip_features)], axis=1)
     df = df.apply(closest_tip, axis=1)
-    closest_review = Closest(review_data, review_features)
+    closest_review = Closest(review_data, review_features, df.shape[0])
     df = pd.concat([df, pd.DataFrame(np.zeros((df.shape[0], len(review_features))), columns=review_features)], axis=1)
     df = df.apply(closest_review, axis=1)
 
@@ -102,8 +102,6 @@ def main():
     submission_data_2 = create_evaluation_data(business_data, checkin_data, tip_data, review_data,
                                                tip_features, review_features, submission_data_2)
     submission_data_2.to_csv("processed_data/phase2_data.csv", index=None)
-
-    # TODO wabbit_it!
 
     return
 
