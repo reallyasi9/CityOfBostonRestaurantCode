@@ -12,3 +12,5 @@
 /.idea/*
 /.ipynb_checkpoints
 /.ipynb_checkpoints/*
+*.zip
+*.ipynb
