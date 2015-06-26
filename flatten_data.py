@@ -9,6 +9,7 @@ import pandas as pd
 from nltk.stem import WordNetLemmatizer
 
 import functions
+from progress.bar import Bar
 
 
 def flatten(structure, key="", path="", flattened=None):
@@ -172,12 +173,25 @@ class LemmaTokenizer(object):
     This is a class to tokenize using WordNet Lemmatizer
     for use with TFIDF Vectorizer.
     """
+    wnl = WordNetLemmatizer()
+    size = None
+    bar = None
+    tick = 0
 
-    def __init__(self):
-        self.wnl = WordNetLemmatizer()
+    def __init__(self, size=None):
+        self.size = size
+        if self.size is not None:
+            self.bar = Bar('Lemmatizing', suffix='%(percent)d%% (%(index)d/%(max)d), %(avg).3f sec/row, ETA %(eta_td)s',
+                           max=self.size)
 
     def __call__(self, doc):
+        self.tick += 1
+        if self.size is not None and self.tick % 100 == 0:
+            self.bar.next(100)
         return functions.pos_and_lemmatize(doc, self.wnl)
+
+    def __del__(self):
+        self.bar.finish()
 
 
 def flatten_tip_data(jsonfile):
@@ -207,7 +221,7 @@ def flatten_tip_data(jsonfile):
                                  analyzer='word',
                                  ngram_range=(1, 2),
                                  max_features=500,
-                                 tokenizer=LemmaTokenizer())
+                                 tokenizer=LemmaTokenizer(df.shape[0]))
 
     tx_data = vectorizer.fit_transform(df['text'])
     tx_data = pd.DataFrame(tx_data.todense())
@@ -251,7 +265,7 @@ def flatten_review_data(jsonfile):
                                  analyzer='word',
                                  ngram_range=(1, 3),
                                  max_features=1000,
-                                 tokenizer=LemmaTokenizer())
+                                 tokenizer=LemmaTokenizer(df.shape[0]))
 
     tx_data = vectorizer.fit_transform(df['text'])
     tx_data = pd.DataFrame(tx_data.todense())
