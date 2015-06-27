@@ -216,18 +216,18 @@ def flatten_tip_data(jsonfile):
     # Now actually build out the dataset
     df = pd.DataFrame(flattened_json)
 
-    vectorizer = TfidfVectorizer(stop_words='english',
-                                 decode_error='replace',
-                                 analyzer='word',
-                                 ngram_range=(1, 2),
-                                 max_features=500,
-                                 tokenizer=LemmaTokenizer(df.shape[0]))
-
-    tx_data = vectorizer.fit_transform(df['text'])
-    tx_data = pd.DataFrame(tx_data.todense())
-    no_word_re = re.compile('\W+')
-    tx_data.columns = ['t.' + no_word_re.sub('_', x) for x in vectorizer.get_feature_names()]
-    df = pd.concat([df, tx_data], axis=1)
+    # vectorizer = TfidfVectorizer(stop_words='english',
+    #                              decode_error='replace',
+    #                              analyzer='word',
+    #                              ngram_range=(1, 2),
+    #                              max_features=500,
+    #                              tokenizer=LemmaTokenizer(df.shape[0]))
+    #
+    # tx_data = vectorizer.fit_transform(df['text'])
+    # tx_data = pd.DataFrame(tx_data.todense())
+    # no_word_re = re.compile('\W+')
+    # tx_data.columns = ['t.' + no_word_re.sub('_', x) for x in vectorizer.get_feature_names()]
+    # df = pd.concat([df, tx_data], axis=1)
 
     # And get rid of useless columns
     df.drop(['type'], inplace=True, axis=1)
@@ -259,19 +259,19 @@ def flatten_review_data(jsonfile):
 
     # Now actually build out the dataset
     df = pd.DataFrame(flattened_json)
-
-    vectorizer = TfidfVectorizer(stop_words='english',
-                                 decode_error='replace',
-                                 analyzer='word',
-                                 ngram_range=(1, 3),
-                                 max_features=1000,
-                                 tokenizer=LemmaTokenizer(df.shape[0]))
-
-    tx_data = vectorizer.fit_transform(df['text'])
-    tx_data = pd.DataFrame(tx_data.todense())
-    no_word_re = re.compile('\W+')
-    tx_data.columns = ['r.' + no_word_re.sub('_', x) for x in vectorizer.get_feature_names()]
-    df = pd.concat([df, tx_data], axis=1)
+    #
+    # vectorizer = TfidfVectorizer(stop_words='english',
+    #                              decode_error='replace',
+    #                              analyzer='word',
+    #                              ngram_range=(1, 3),
+    #                              max_features=1000,
+    #                              tokenizer=LemmaTokenizer(df.shape[0]))
+    #
+    # tx_data = vectorizer.fit_transform(df['text'])
+    # tx_data = pd.DataFrame(tx_data.todense())
+    # no_word_re = re.compile('\W+')
+    # tx_data.columns = ['r.' + no_word_re.sub('_', x) for x in vectorizer.get_feature_names()]
+    # df = pd.concat([df, tx_data], axis=1)
 
     # And get rid of useless columns
     df.drop(['type'], inplace=True, axis=1)

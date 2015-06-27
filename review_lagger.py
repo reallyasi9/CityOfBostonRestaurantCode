@@ -86,8 +86,13 @@ class Lagger(object):
             row['last*'] = prev_rows.loc[latest, '*'].tolist()[0]
             row['last**'] = prev_rows.loc[latest, '**'].tolist()[0]
             row['last***'] = prev_rows.loc[latest, '***'].tolist()[0]
-            row['std*'] = prev_rows['*'].std()
-            row['std**'] = prev_rows['**'].std()
-            row['std***'] = prev_rows['***'].std()
+            if prev_rows.shape[0] == 1:
+                row['std*'] = row['last*']
+                row['std**'] = row['last**']
+                row['std***'] = row['last***']
+            else:
+                row['std*'] = prev_rows['*'].std()
+                row['std**'] = prev_rows['**'].std()
+                row['std***'] = prev_rows['***'].std()
 
         return row

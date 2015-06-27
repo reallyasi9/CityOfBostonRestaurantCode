@@ -31,6 +31,7 @@ def main(argv):
         sys.exit(1)
 
     for o, a in opts:
+        print("reading %s %s" % (o, a))
         if o in ("-t", "--tip_file"):
             tip_file = a
         elif o in ("-r", "--review_file"):
@@ -70,6 +71,8 @@ def main(argv):
     for n, fn in enumerate(in_files):
         in_data = pd.DataFrame.from_csv(fn, index_col=None)
         in_data.ix[:, 'date'] = in_data.ix[:, 'date'].apply(functions.date_to_seconds).astype('int32')
+        in_data.set_index(['restaurant_id', 'date'], inplace=True)
+        in_data.sortlevel(0, inplace=True)
         out = create_evaluation_data(training_data, tip_data, review_data, in_data)
         out.to_csv(out_files[n], index=None)
 
