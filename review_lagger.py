@@ -1,8 +1,6 @@
 import math
 import re
 
-import nltk
-import pandas as pd
 import progress.bar
 
 from functions import LemmaTokenizer
@@ -16,7 +14,6 @@ class Lagger(object):
     _tdf = None
     _bar = None
     _tick = 0
-    _stemmer = nltk.stem.snowball.SnowballStemmer("english", ignore_stopwords=True)
     _lemmatizer = LemmaTokenizer()
     _clean_re = re.compile(r'\W+')
 
@@ -31,8 +28,8 @@ class Lagger(object):
     def __call__(self, row):
         if self._bar is not None:
             self._tick += 1
-            if self._tick % 100 == 0:
-                self._bar.next(100)
+            if self._tick % 10 == 0:
+                self._bar.next(10)
             elif self._tick == self._bar.max:
                 self._bar.goto(self._bar.max)
 
@@ -85,8 +82,8 @@ class Lagger(object):
                 return row
 
             # Simply concatenate the reviews and tips together
-            concat_r = " ".join(found_r['text'])
-            concat_t = " ".join(found_t['text'])
+            concat_r = " ".join(found_r.loc[:, 'text'])
+            concat_t = " ".join(found_t.loc[:, 'text'])
             found_cat = " ".join([concat_r, concat_t])
             row['text'] = " ".join(self._lemmatizer(found_cat))
 
@@ -96,9 +93,9 @@ class Lagger(object):
             sum_wts = wts.sum()
             prev_rows.loc[:, 'wt'] = wts / sum_wts
 
-            row['p*'] = prev_rows['*'].mul(prev_rows['wt']).sum()
-            row['p**'] = prev_rows['**'].mul(prev_rows['wt']).sum()
-            row['p***'] = prev_rows['***'].mul(prev_rows['wt']).sum()
+            row['p*'] = prev_rows.ix[:, '*'].mul(prev_rows.ix[:, 'wt']).sum()
+            row['p**'] = prev_rows.ix[:, '**'].mul(prev_rows.ix[:, 'wt']).sum()
+            row['p***'] = prev_rows.ix[:, '***'].mul(prev_rows.ix[:, 'wt']).sum()
             row['last*'] = prev_rows.loc[latest, '*'].tolist()[0]
             row['last**'] = prev_rows.loc[latest, '**'].tolist()[0]
             row['last***'] = prev_rows.loc[latest, '***'].tolist()[0]
@@ -107,8 +104,8 @@ class Lagger(object):
                 row['std**'] = row['last**']
                 row['std***'] = row['last***']
             else:
-                row['std*'] = prev_rows['*'].std()
-                row['std**'] = prev_rows['**'].std()
-                row['std***'] = prev_rows['***'].std()
+                row['std*'] = prev_rows.ix[:, '*'].std()
+                row['std**'] = prev_rows.ix[:, '**'].std()
+                row['std***'] = prev_rows.ix[:, '***'].std()
 
         return row
