@@ -74,7 +74,7 @@ def main(argv):
         in_data.set_index(['restaurant_id', 'date'], inplace=True)
         in_data.sortlevel(0, inplace=True)
         out = create_evaluation_data(training_data, tip_data, review_data, in_data)
-        out.to_csv(out_files[n], index=None)
+        out.to_csv(out_files[n])
 
     return
 

@@ -55,11 +55,13 @@ def build_restaurant_id_map(csvfile):
                     id_dict[e] = row[0]
     return id_dict
 
+
 def hour_to_seconds(hour):
     if hour is None or hour != hour:
         return -1
     x = time.strptime(hour, '%H:%M')
     return datetime.timedelta(hours=x.tm_hour, minutes=x.tm_min, seconds=x.tm_sec).total_seconds()
+
 
 def date_to_seconds(text):
     if text is None or text != text:
@@ -67,21 +69,33 @@ def date_to_seconds(text):
     x = time.strptime(text, '%Y-%m-%d')
     return calendar.timegm(x)
 
-def get_wordnet_pos(treebank_tag):
 
-    if treebank_tag.startswith('J'):
-        return wordnet.ADJ
-    elif treebank_tag.startswith('V'):
-        return wordnet.VERB
-    elif treebank_tag.startswith('N'):
-        return wordnet.NOUN
-    elif treebank_tag.startswith('R'):
-        return wordnet.ADV
-    else:
-        return wordnet.NOUN # TODO something smarter
+class LemmaTokenizer(object):
+    _lemmatizer = nltk.stem.WordNetLemmatizer()
 
-def pos_and_lemmatize(text, lemmatizer):
-    words = [w.encode('ascii', 'ignore').decode('utf-8') for w in word_tokenize(text)]
-    pos = nltk.pos_tag(words)
-    lemmas = [lemmatizer.lemmatize(w, pos=get_wordnet_pos(p)) for (w, p) in pos]
-    return lemmas
+    @staticmethod
+    def get_wordnet_pos(treebank_tag):
+
+        if treebank_tag.startswith('J'):
+            return wordnet.ADJ
+        elif treebank_tag.startswith('V'):
+            return wordnet.VERB
+        elif treebank_tag.startswith('N'):
+            return wordnet.NOUN
+        elif treebank_tag.startswith('R'):
+            return wordnet.ADV
+        else:
+            return wordnet.ADJ  # TODO something smarter
+
+    def pos_and_lemmatize(self, text):
+        print(text)
+        words = nltk.tokenize.regexp_tokenize(text, r"\w+")
+        print(words)
+        pos = nltk.pos_tag(words)
+        print(pos)
+        lemmas = [self._lemmatizer.lemmatize(w, pos=self.get_wordnet_pos(p)) for (w, p) in pos]
+        print(lemmas)
+        return lemmas
+
+    def __call__(self, text):
+        return self.pos_and_lemmatize(text)

@@ -168,32 +168,6 @@ def flatten_checkin_data(jsonfile):
     return df
 
 
-class LemmaTokenizer(object):
-    """
-    This is a class to tokenize using WordNet Lemmatizer
-    for use with TFIDF Vectorizer.
-    """
-    wnl = WordNetLemmatizer()
-    size = None
-    bar = None
-    tick = 0
-
-    def __init__(self, size=None):
-        self.size = size
-        if self.size is not None:
-            self.bar = Bar('Lemmatizing', suffix='%(percent)d%% (%(index)d/%(max)d), %(avg).3f sec/row, ETA %(eta_td)s',
-                           max=self.size)
-
-    def __call__(self, doc):
-        self.tick += 1
-        if self.size is not None and self.tick % 100 == 0:
-            self.bar.next(100)
-        return functions.pos_and_lemmatize(doc, self.wnl)
-
-    def __del__(self):
-        self.bar.finish()
-
-
 def flatten_tip_data(jsonfile):
     """ Construct a pandas 2D dataset from the tip json
 
