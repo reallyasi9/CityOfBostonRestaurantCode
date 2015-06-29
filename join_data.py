@@ -1,11 +1,11 @@
 #!/usr/bin/python3
 import argparse
-import functions
+
 import pandas as pd
 import numpy as np
+
+import functions
 import review_lagger
-import optparse
-import sys
 
 
 def create_evaluation_data(inspection_data, tip_data, review_data, target_data):
@@ -14,29 +14,40 @@ def create_evaluation_data(inspection_data, tip_data, review_data, target_data):
     return df
 
 
-def main(tip_file='processed_data/tip_data.csv',
-         review_file='processed_data/review_data.csv',
-         train_file='data/train_labels.csv',
-         yelp_id_file="data/restaurant_ids_to_yelp_ids.csv",
-         business_file="processed_data/business_data.csv",
-         checkin_file="processed_data/checkin_data.csv",
-         in_files=['data/SubmissionFormat.csv', 'data/train_labels.csv', 'data/PhaseIISubmissionFormat.csv'],
-         out_files=["processed_data/submission_data_raw.csv", "processed_data/training_data_raw.csv",
-                    "processed_data/phase2_data_raw.csv"]):
+def main(tip_file=None,
+         review_file=None,
+         train_file=None,
+         yelp_id_file=None,
+         business_file=None,
+         checkin_file=None,
+         in_files=None,
+         out_files=None):
     tip_data = pd.DataFrame.from_csv(tip_file, index_col=None)
     review_data = pd.DataFrame.from_csv(review_file, index_col=None)
-    business_data = pd.DataFrame.from_csv(business_file, index_col=None)
-    checkin_data = pd.DataFrame.from_csv(checkin_file, index_col=None)
+    business_data = None
+    checkin_data = None
 
     # Add restaurant IDs to everything
     id_dict = functions.build_restaurant_id_map(yelp_id_file)
     map_to_boston_ids = lambda yid: id_dict[yid] if yid in id_dict else np.nan
-
-    for df in [tip_data, review_data, business_data, checkin_data]:
+    for df in [tip_data, review_data]:
         df['restaurant_id'] = df.loc[:, 'business_id'].map(map_to_boston_ids)
         df.drop(['business_id'], axis=1, inplace=True)
         # drop those businesses that are not in the Boston dataset
         df.dropna(axis=0, subset=['restaurant_id'], inplace=True)
+
+    if business_file is not None:
+        business_data = pd.DataFrame.from_csv(business_file, index_col=None)
+        business_data['restaurant_id'] = business_data.loc[:, 'business_id'].map(map_to_boston_ids)
+        business_data.drop(['business_id'], axis=1, inplace=True)
+        # drop those businesses that are not in the Boston dataset
+        business_data.dropna(axis=0, subset=['restaurant_id'], inplace=True)
+    if checkin_file is not None:
+        checkin_data = pd.DataFrame.from_csv(checkin_file, index_col=None)
+        checkin_data['restaurant_id'] = checkin_data.loc[:, 'business_id'].map(map_to_boston_ids)
+        checkin_data.drop(['business_id'], axis=1, inplace=True)
+        # drop those businesses that are not in the Boston dataset
+        checkin_data.dropna(axis=0, subset=['restaurant_id'], inplace=True)
 
     # Set indices to make the matching faster
     for df in [tip_data, review_data]:
@@ -63,8 +74,10 @@ def main(tip_file='processed_data/tip_data.csv',
         out = create_evaluation_data(training_data, tip_data, review_data, in_data)
         out.reset_index(inplace=True)
         out.set_index('restaurant_id', inplace=True)
-        out = out.merge(business_data, how="left", left_index=True, right_index=True, sort=False)
-        out = out.merge(checkin_data, how="left", left_index=True, right_index=True, sort=False)
+        if business_data is not None:
+            out = out.merge(business_data, how="left", left_index=True, right_index=True, sort=False)
+        if checkin_data is not None:
+            out = out.merge(checkin_data, how="left", left_index=True, right_index=True, sort=False)
         out.reset_index(inplace=True)
         out.loc[:, 'id'] = out.loc[:, 'id'].astype('int32')
         out.set_index('id', inplace=True)
