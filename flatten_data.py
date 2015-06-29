@@ -4,10 +4,7 @@ import json
 import re
 from itertools import chain
 
-from sklearn.feature_extraction.text import TfidfVectorizer
 import pandas as pd
-from nltk.stem import WordNetLemmatizer
-from progress.bar import Bar
 
 import functions
 

@@ -1,9 +1,10 @@
 import math
 import re
+
 import nltk
 import pandas as pd
 import progress.bar
-from sklearn.feature_extraction.text import TfidfVectorizer
+
 from functions import LemmaTokenizer
 
 __author__ = 'pkillewald'
@@ -16,13 +17,7 @@ class Lagger(object):
     _bar = None
     _tick = 0
     _stemmer = nltk.stem.snowball.SnowballStemmer("english", ignore_stopwords=True)
-    _vectorizer = TfidfVectorizer(max_df=0.9,
-                                  min_df=1,
-                                  decode_error='replace',
-                                  analyzer='word',
-                                  ngram_range=(2, 4),
-                                  max_features=2000,
-                                  tokenizer=LemmaTokenizer())
+    _lemmatizer = LemmaTokenizer()
     _clean_re = re.compile(r'\W+')
 
     def __init__(self, inspect_df, review_df, tip_df, size=None):
@@ -46,27 +41,6 @@ class Lagger(object):
         rid = row.name[0]
         date = row.name[1]
 
-        found_r = self._rdf.ix[rid] if rid in self._rdf.index else None
-        found_r = found_r.ix[:date] if found_r is not None else None
-        found_t = self._tdf.ix[rid] if rid in self._tdf.index else None
-        found_t = found_t.ix[:date] if found_t is not None else None
-        if found_r is None or found_t is None:
-            # FIXME Do something smarter than zeros?
-            row['p*'] = 0
-            row['p**'] = 0
-            row['p***'] = 0
-            row['last*'] = 0
-            row['last**'] = 0
-            row['last***'] = 0
-            row['std*'] = 0
-            row['std**'] = 0
-            row['std***'] = 0
-            return row
-
-        # Simply concatenate the reviews and tips together
-        found_cat = pd.concat([found_r, found_t])
-        row['text'] = self._vectorizer.fit_transform(found_cat['text'])
-
         # Get inspections that happened strictly before this inspection
         prev_rows = self._idf.ix[rid] if rid in self._idf.index else None
         prev_rows = prev_rows.ix[:(date - 1)] if prev_rows is not None else None
@@ -86,7 +60,36 @@ class Lagger(object):
             row['std*'] = 0
             row['std**'] = 0
             row['std***'] = 0
+            return row
+
         else:
+
+            latest = (prev_rows.index == prev_rows.index.max())
+            prev_date = prev_rows[latest].index[0]
+
+            found_r = self._rdf.ix[rid] if rid in self._rdf.index else None
+            found_r = found_r.ix[prev_date:date] if found_r is not None else None
+            found_t = self._tdf.ix[rid] if rid in self._tdf.index else None
+            found_t = found_t.ix[prev_date:date] if found_t is not None else None
+            if found_r is None or found_t is None:
+                # FIXME Do something smarter than zeros?
+                row['p*'] = 0
+                row['p**'] = 0
+                row['p***'] = 0
+                row['last*'] = 0
+                row['last**'] = 0
+                row['last***'] = 0
+                row['std*'] = 0
+                row['std**'] = 0
+                row['std***'] = 0
+                return row
+
+            # Simply concatenate the reviews and tips together
+            concat_r = " ".join(found_r['text'])
+            concat_t = " ".join(found_t['text'])
+            found_cat = " ".join([concat_r, concat_t])
+            row['text'] = " ".join(self._lemmatizer(found_cat))
+
             wts = prev_rows.index.to_series().add(-date)  # remember: negative!
             wts = wts.map(
                 lambda x: math.exp(x / (4383 * 3600)))  # What?  You don't know how many hours are in 6 months?
@@ -96,7 +99,6 @@ class Lagger(object):
             row['p*'] = prev_rows['*'].mul(prev_rows['wt']).sum()
             row['p**'] = prev_rows['**'].mul(prev_rows['wt']).sum()
             row['p***'] = prev_rows['***'].mul(prev_rows['wt']).sum()
-            latest = (prev_rows.index == prev_rows.index.max())
             row['last*'] = prev_rows.loc[latest, '*'].tolist()[0]
             row['last**'] = prev_rows.loc[latest, '**'].tolist()[0]
             row['last***'] = prev_rows.loc[latest, '***'].tolist()[0]

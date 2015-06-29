@@ -88,13 +88,9 @@ class LemmaTokenizer(object):
             return wordnet.ADJ  # TODO something smarter
 
     def pos_and_lemmatize(self, text):
-        print(text)
         words = nltk.tokenize.regexp_tokenize(text, r"\w+")
-        print(words)
         pos = nltk.pos_tag(words)
-        print(pos)
         lemmas = [self._lemmatizer.lemmatize(w, pos=self.get_wordnet_pos(p)) for (w, p) in pos]
-        print(lemmas)
         return lemmas
 
     def __call__(self, text):
