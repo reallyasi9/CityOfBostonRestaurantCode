@@ -76,8 +76,7 @@ def main(training_file, in_files, out_files, out_format_files):
 
     for fs in zip(in_files, out_files, out_format_files):
         predict_df = pandas.DataFrame.from_csv(fs[0], index_col=None)
-        out_df = predict_df.loc[:, "id"].astype("int32")
-        out_df.set_index("id", inplace=True)
+        out_df = pandas.DataFrame(index=predict_df.loc[:, "id"].astype("int32"))
         print(out_df)
         predict_df.set_index("id", inplace=True)
         predict_df = predict_df._get_numeric_data()
