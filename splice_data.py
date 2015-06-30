@@ -1,3 +1,5 @@
+#!/usr/bin/python3
+
 import argparse
 import functions
 import numpy as np
@@ -6,7 +8,7 @@ import pandas as pd
 __author__ = 'pkillewald'
 
 
-def main(tip_file, review_file, train_file, yelp_id_file, business_file, checkin_file, in_files, out_files):
+def main(yelp_id_file, business_file, checkin_file, in_files, out_files):
     id_dict = functions.build_restaurant_id_map(yelp_id_file)
     map_to_boston_ids = lambda yid: id_dict[yid] if yid in id_dict else np.nan
 
@@ -32,8 +34,10 @@ def main(tip_file, review_file, train_file, yelp_id_file, business_file, checkin
         in_data = pd.DataFrame.from_csv(fn[0], index_col='restaurant_id')
         if business_data is not None:
             in_data = in_data.merge(business_data, how="left", left_index=True, right_index=True, sort=False)
+            in_data.fillna(0, inplace=True)
         if checkin_data is not None:
             in_data = in_data.merge(checkin_data, how="left", left_index=True, right_index=True, sort=False)
+            in_data.fillna(0, inplace=True)
         in_data.reset_index(inplace=True)
         in_data.set_index('id', inplace=True)
         in_data.to_csv(fn[1])
@@ -46,24 +50,20 @@ if __name__ == "__main__":
                         dest="yelp_id_file",
                         help="File containing translation between Yelp! ID and Boston restaurant ID",
                         metavar="JSONFILE",
-                        type=argparse.FileType('r'),
                         default="data/restaurant_ids_to_yelp_ids.csv")
     parser.add_argument("-b", "--business_file",
                         dest="business_file",
                         help="Business features data file",
-                        metavar="CSVFILE",
-                        type=argparse.FileType('r'))
+                        metavar="CSVFILE")
     parser.add_argument("-c", "--checkin_file",
                         dest="checkin_file",
                         help="Labeled check-in data file",
-                        metavar="CSVFILE",
-                        type=argparse.FileType('r'))
+                        metavar="CSVFILE")
     parser.add_argument("-i", "--in_file",
                         dest="in_files",
                         nargs="+",
                         help="Input file to join with other files",
                         metavar="CSVFILE",
-                        type=argparse.FileType('r'),
                         default=['data/train_labels.csv',
                                  'data/SubmissionFormat.csv',
                                  'data/PhaseIISubmissionFormat.csv'])
@@ -72,7 +72,6 @@ if __name__ == "__main__":
                         nargs="+",
                         help="Output file",
                         metavar="CSVFILE",
-                        type=argparse.FileType('w'),
                         default=["processed_data/training_data_raw.csv",
                                  "processed_data/submission_data_raw.csv",
                                  "processed_data/phase2_data_raw.csv"])
@@ -85,6 +84,5 @@ if __name__ == "__main__":
     if args.business_file is None and args.checkin_file is None:
         parser.error("at least one of business_file or checkin_file must be specified")
 
-    main(tip_file=args.tip_file, review_file=args.review_file, train_file=args.train_file,
-         yelp_id_file=args.yelp_id_file, business_file=args.business_file,
+    main(yelp_id_file=args.yelp_id_file, business_file=args.business_file,
          checkin_file=args.checkin_file, in_files=args.in_files, out_files=args.out_files)

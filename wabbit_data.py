@@ -35,8 +35,7 @@ def main():
                  "processed_data/phase2_data_%d.vw"]
 
     col_dict = {'lagged': ['p*', 'p**', 'p***', 'last*', 'last**', 'last***', 'std*', 'std**', 'std***'],
-                "other": ["date", "restaurant_id"],
-                "text": ["text"]}
+                "other": ["date", "restaurant_id"]}
 
     for fs in zip(in_files, out_files):
         df = pd.DataFrame.from_csv(fs[0], index_col=None)
