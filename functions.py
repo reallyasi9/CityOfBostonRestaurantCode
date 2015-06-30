@@ -70,6 +70,11 @@ def date_to_seconds(text):
     return calendar.timegm(x)
 
 
+def seconds_to_date(num):
+    x = time.gmtime(num)
+    return time.strftime("%Y-%m-%d", x)
+
+
 class LemmaTokenizer(object):
     _lemmatizer = nltk.stem.WordNetLemmatizer()
 

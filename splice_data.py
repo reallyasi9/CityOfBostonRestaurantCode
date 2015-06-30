@@ -32,6 +32,7 @@ def main(yelp_id_file, business_file, checkin_file, in_files, out_files):
 
     for fn in zip(in_files, out_files):
         in_data = pd.DataFrame.from_csv(fn[0], index_col='restaurant_id')
+        in_data = pd.DataFrame.from_csv(fn[0], index_col='restaurant_id')
         if business_data is not None:
             in_data = in_data.merge(business_data, how="left", left_index=True, right_index=True, sort=False)
             in_data.fillna(0, inplace=True)
