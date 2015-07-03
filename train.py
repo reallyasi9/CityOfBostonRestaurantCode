@@ -3,11 +3,13 @@ import argparse
 import numpy
 import pandas
 from time import time
+import pickle
 import scipy.stats
 from sklearn.grid_search import RandomizedSearchCV
-from sklearn.linear_model import BayesianRidge
+from sklearn.grid_search import GridSearchCV
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestRegressor
 from operator import itemgetter
-import functions
 import sklearn.ensemble
 import sklearn.tree
 
@@ -25,63 +27,76 @@ def report(grid_scores, n_top=3):
         print("")
 
 
-def main(training_file):
+def main(training_file, classifier_columns, regressor_columns, classifier_outfile, regressor_outfiles):
+    targets = ["*", "**", "***"]
+
     train_df = pandas.DataFrame.from_csv(training_file, index_col="id")
-    outcomes = train_df[["*", "**", "***"]]
-    train_df = train_df._get_numeric_data()
-    train_df.drop(["*", "**", "***"], axis=1, inplace=True)
+    outcomes = train_df.loc[:, targets]
 
-    bdt_param_map = {"learning_rate": scipy.stats.uniform(),
-                     "algorithm": ["SAMME", "SAMME.R"],
-                     "n_estimators": scipy.stats.randint(low=150, high=301),
-                     "base_estimator": [sklearn.tree.DecisionTreeClassifier(max_depth=1),
-                                        sklearn.tree.DecisionTreeClassifier(max_depth=2),
-                                        sklearn.tree.DecisionTreeClassifier(max_depth=3)]}
+    classify_df = None
+    if classifier_columns is None:
+        classify_df = train_df._get_numeric_data().astype("float64")
+    else:
+        classify_df = train_df.loc[:, classifier_columns].astype("float64")
+    classify_df = classify_df.apply(lambda x: sklearn.preprocessing.StandardScaler().fit_transform(x))
 
-    best_classifier = {}
+    classifier = RandomForestClassifier(n_jobs=-1,
+                                        verbose=1)
 
-    for oc in ["*", "**", "***"]:
+    bdt_param_map = {"n_estimators": scipy.stats.randint(low=500, high=2000),
+                     "min_weight_fraction_leaf": scipy.stats.uniform(0, 0.1)}
+
+    # Randomize classification
+    n_iter_search = 100
+    random_search = RandomizedSearchCV(classifier,
+                                       param_distributions=bdt_param_map,
+                                       n_iter=n_iter_search,
+                                       refit=True)
+
+    print("Attempting %d searches" % n_iter_search)
+    clamped_outcomes = outcomes.any(axis="columns")
+    start = time()
+    random_search.fit(classify_df, clamped_outcomes)
+    print("Search took %.2f seconds for %d candidates"
+          " parameter settings." % ((time() - start), n_iter_search))
+
+    report(random_search.grid_scores_)
+    pickle.dump(random_search.best_estimator_, classifier_outfile)
+
+    violators = random_search.best_estimator_.predict(classify_df)
+
+    regress_df = None
+    if regressor_columns is None:
+        regress_df = train_df._get_numeric_data().astype("float64")
+    else:
+        regress_df = train_df.loc[:, regressor_columns].astype("float64")
+    regress_df = regress_df[violators]
+    regress_df = regress_df.apply(lambda x: sklearn.preprocessing.StandardScaler().fit_transform(x))
+
+    regressor = RandomForestRegressor(n_jobs=-1,
+                                      verbose=1)
+
+    bdt_param_map = {"n_estimators": scipy.stats.randint(low=10, high=1000),
+                     "min_weight_fraction_leaf": scipy.stats.uniform()}
+
+    # Randomize classification
+
+    for n, oc in enumerate(targets):
         # Randomize classification
-        n_iter_search = 20
-        bdt = sklearn.ensemble.AdaBoostClassifier()
-        random_search = RandomizedSearchCV(bdt, param_distributions=bdt_param_map,
-                                           n_iter=n_iter_search, n_jobs=2)
+        random_search = RandomizedSearchCV(regressor,
+                                           param_distributions=bdt_param_map,
+                                           n_iter=n_iter_search,
+                                           refit=True)
 
         print("Attempting %d searches on %s" % (n_iter_search, oc))
-        clamped_outcomes = outcomes.loc[:, oc].clip_upper(1)
         start = time()
-        random_search.fit(train_df, clamped_outcomes)
+        random_search.fit(regress_df, outcomes.loc[violators, oc])
         print("RandomizedSearchCV on %s took %.2f seconds for %d candidates"
               " parameter settings." % (oc, (time() - start), n_iter_search))
 
         report(random_search.grid_scores_)
 
-        best_classifier[oc] = random_search
-        print(best_classifier)
-    #
-    # # Parameters discovered using RandomizedSearchCV
-    # regressor = BayesianRidge(verbose=True)
-    #
-    # bayes_param_map = {"alpha_1": scipy.stats.expon(scale=1.e-6),
-    #                    "alpha_2": scipy.stats.expon(scale=1.e-6),
-    #                    "lambda_1": scipy.stats.expon(scale=1.e-6),
-    #                    "lambda_2": scipy.stats.expon(scale=1.e-6),
-    #                    "fit_intercept": [True, False],
-    #                    "normalize": [True, False]}
-    #
-    # # run randomized search
-    # n_iter_search = 20
-    # random_search = RandomizedSearchCV(regressor, param_distributions=bayes_param_map,
-    #                                    n_iter=n_iter_search)
-    #
-    # for oc in ["*", "**", "***"]:
-    #     print("Attempting %d searches on %s" % (n_iter_search, oc))
-    #     start = time()
-    #     random_search.fit(df, outcomes.loc[:, oc])
-    #     print("RandomizedSearchCV on %s took %.2f seconds for %d candidates"
-    #           " parameter settings." % (oc, (time() - start), n_iter_search))
-    #
-    #     report(random_search.grid_scores_)
+        pickle.dump(random_search.best_estimator_, regressor_outfiles[n])
 
     return
 
@@ -93,7 +108,127 @@ if __name__ == "__main__":
                         help="File to use for training",
                         metavar="CSVFILE",
                         default="processed_data/training_data_vectorized.csv")
+    parser.add_argument("-c", "--classifier-column",
+                        dest="classifier_columns",
+                        help="Columns to use in classification",
+                        nargs="+",
+                        default=['date', 'last*', 'last**', 'last***', 'p*', 'p**', 'p***', 'std*', 'std**', 'std***',
+                                 'attributes.Accepts Credit Cards', 'attributes.Ambience.casual',
+                                 'attributes.Ambience.classy', 'attributes.Ambience.divey',
+                                 'attributes.Ambience.hipster', 'attributes.Ambience.intimate',
+                                 'attributes.Ambience.romantic', 'attributes.Ambience.touristy',
+                                 'attributes.Ambience.trendy', 'attributes.Ambience.upscale', 'attributes.BYOB',
+                                 'attributes.By Appointment Only', 'attributes.Caters', 'attributes.Coat Check',
+                                 'attributes.Corkage', 'attributes.Delivery',
+                                 'attributes.Dietary Restrictions.dairy-free',
+                                 'attributes.Dietary Restrictions.gluten-free', 'attributes.Dietary Restrictions.halal',
+                                 'attributes.Dietary Restrictions.kosher', 'attributes.Dietary Restrictions.soy-free',
+                                 'attributes.Dietary Restrictions.vegan',
+                                 'attributes.Dietary Restrictions.vegetarian', 'attributes.Dogs Allowed',
+                                 'attributes.Drive-Thru', 'attributes.Good For Dancing', 'attributes.Good For Groups',
+                                 'attributes.Good For Kids', 'attributes.Good For.breakfast',
+                                 'attributes.Good For.brunch', 'attributes.Good For.dessert',
+                                 'attributes.Good For.dinner', 'attributes.Good For.latenight',
+                                 'attributes.Good For.lunch', 'attributes.Good for Kids', 'attributes.Happy Hour',
+                                 'attributes.Has TV', 'attributes.Music.background_music', 'attributes.Music.dj',
+                                 'attributes.Music.jukebox', 'attributes.Music.karaoke', 'attributes.Music.live',
+                                 'attributes.Music.video', 'attributes.Open 24 Hours', 'attributes.Order at Counter',
+                                 'attributes.Outdoor Seating', 'attributes.Parking.garage', 'attributes.Parking.lot',
+                                 'attributes.Parking.street', 'attributes.Parking.valet',
+                                 'attributes.Parking.validated', 'attributes.Payment Types.amex',
+                                 'attributes.Payment Types.cash_only', 'attributes.Payment Types.discover',
+                                 'attributes.Payment Types.mastercard', 'attributes.Payment Types.visa',
+                                 'attributes.Price Range', 'attributes.Smoking', 'attributes.Take-out',
+                                 'attributes.Takes Reservations', 'attributes.Waiter Service',
+                                 'attributes.Wheelchair Accessible', 'categories.Active Life',
+                                 'categories.Adult Entertainment', 'categories.Afghan',
+                                 'categories.African', 'categories.American (New)', 'categories.American (Traditional)',
+                                 'categories.Art Galleries', 'categories.Arts & Entertainment',
+                                 'categories.Asian Fusion', 'categories.Austrian', 'categories.Bagels',
+                                 'categories.Bakeries', 'categories.Bangladeshi', 'categories.Barbeque',
+                                 'categories.Bars', 'categories.Basque', 'categories.Beer, Wine & Spirits',
+                                 'categories.Belgian', 'categories.Books, Mags, Music & Video', 'categories.Bookstores',
+                                 'categories.Bowling', 'categories.Brazilian', 'categories.Breakfast & Brunch',
+                                 'categories.Breweries', 'categories.British', 'categories.Bubble Tea',
+                                 'categories.Buffets', 'categories.Burgers', 'categories.Burmese', 'categories.Cafes',
+                                 'categories.Cajun/Creole', 'categories.Cambodian', 'categories.Cantonese',
+                                 'categories.Caribbean', 'categories.Caterers', 'categories.Cheese Shops',
+                                 'categories.Cheesesteaks', 'categories.Chicken Wings', 'categories.Chinese',
+                                 'categories.Chocolatiers & Shops', 'categories.Cocktail Bars',
+                                 'categories.Coffee & Tea', 'categories.Colleges & Universities',
+                                 'categories.Colombian', 'categories.Comedy Clubs', 'categories.Comfort Food',
+                                 'categories.Convenience Stores', 'categories.Creperies', 'categories.Cuban',
+                                 'categories.Cupcakes', 'categories.Dance Clubs', 'categories.Delis',
+                                 'categories.Desserts', 'categories.Dim Sum', 'categories.Diners',
+                                 'categories.Dive Bars', 'categories.Do-It-Yourself Food', 'categories.Dominican',
+                                 'categories.Donuts', 'categories.Education', 'categories.Educational Services',
+                                 'categories.Ethiopian', 'categories.Ethnic Food',
+                                 'categories.Event Planning & Services', 'categories.Falafel', 'categories.Fashion',
+                                 'categories.Fast Food', 'categories.Fish & Chips', 'categories.Fondue',
+                                 'categories.Food', 'categories.Food Delivery Services', 'categories.Food Stands',
+                                 'categories.Food Trucks', 'categories.French', 'categories.Fruits & Veggies',
+                                 'categories.Gastropubs', 'categories.Gay Bars', 'categories.Gelato',
+                                 'categories.German', 'categories.Gluten-Free', 'categories.Greek',
+                                 'categories.Grocery', 'categories.Halal', 'categories.Health Markets',
+                                 'categories.Himalayan/Nepalese', 'categories.Hookah Bars', 'categories.Hot Dogs',
+                                 'categories.Hot Pot', 'categories.Hotels', 'categories.Hotels & Travel',
+                                 'categories.Hungarian', 'categories.Ice Cream & Frozen Yogurt', 'categories.Indian',
+                                 'categories.Internet Cafes', 'categories.Irish', 'categories.Irish Pub',
+                                 'categories.Italian', 'categories.Japanese', 'categories.Jazz & Blues',
+                                 'categories.Juice Bars & Smoothies', 'categories.Karaoke', 'categories.Korean',
+                                 'categories.Kosher', 'categories.Latin American', 'categories.Lebanese',
+                                 'categories.Live/Raw Food', 'categories.Lounges', 'categories.Malaysian',
+                                 'categories.Meat Shops', 'categories.Mediterranean', "categories.Men's Clothing",
+                                 'categories.Mexican', 'categories.Middle Eastern', 'categories.Modern European',
+                                 'categories.Mongolian', 'categories.Moroccan', 'categories.Museums',
+                                 'categories.Music Venues', 'categories.Nightlife', 'categories.Pakistani',
+                                 'categories.Party & Event Planning', 'categories.Performing Arts',
+                                 'categories.Persian/Iranian', 'categories.Peruvian', 'categories.Pizza',
+                                 'categories.Polish', 'categories.Pool Halls', 'categories.Portuguese',
+                                 'categories.Pubs', 'categories.Puerto Rican', 'categories.Ramen',
+                                 'categories.Restaurants', 'categories.Salad', 'categories.Sandwiches',
+                                 'categories.Scottish', 'categories.Seafood', 'categories.Seafood Markets',
+                                 'categories.Senegalese', 'categories.Shopping', 'categories.Soul Food',
+                                 'categories.Soup', 'categories.Southern', 'categories.Spanish',
+                                 'categories.Specialty Food', 'categories.Sports Bars', 'categories.Steakhouses',
+                                 'categories.Sushi Bars', 'categories.Szechuan', 'categories.Taiwanese',
+                                 'categories.Tapas Bars', 'categories.Tapas/Small Plates', 'categories.Tea Rooms',
+                                 'categories.Tex-Mex', 'categories.Thai', 'categories.Tobacco Shops',
+                                 'categories.Turkish', 'categories.Vegan', 'categories.Vegetarian',
+                                 'categories.Venezuelan', 'categories.Venues & Event Spaces', 'categories.Vietnamese',
+                                 'categories.Wine Bars', 'categories.Wineries', "categories.Women's Clothing",
+                                 'latitude', 'longitude', 'neighborhoods.Allston/Brighton', 'neighborhoods.Back Bay',
+                                 'neighborhoods.Beacon Hill', 'neighborhoods.Central Square',
+                                 'neighborhoods.Charlestown', 'neighborhoods.Chinatown', 'neighborhoods.Dorchester',
+                                 'neighborhoods.Downtown', 'neighborhoods.Dudley Square', 'neighborhoods.East Boston',
+                                 'neighborhoods.Egleston Square', 'neighborhoods.Fenway', 'neighborhoods.Fields Corner',
+                                 'neighborhoods.Financial District', 'neighborhoods.Hyde Park',
+                                 'neighborhoods.Jamaica Plain', 'neighborhoods.Leather District',
+                                 'neighborhoods.Mattapan', 'neighborhoods.Mission Hill', 'neighborhoods.North End',
+                                 'neighborhoods.Roslindale', 'neighborhoods.Roslindale Village',
+                                 'neighborhoods.South Boston', 'neighborhoods.South End', 'neighborhoods.Uphams Corner',
+                                 'neighborhoods.Waterfront', 'neighborhoods.West Roxbury',
+                                 'neighborhoods.West Roxbury Center', 'review_count', 'stars', 'zip'])
+    parser.add_argument("-r", "--regressor-column",
+                        dest="regressor_columns",
+                        help="Columns to use in regression",
+                        nargs="+",
+                        default=None)
+    parser.add_argument("-co", "--classifier-outfile",
+                        dest="classifier_outfile",
+                        help="Outout file for classifier",
+                        type=argparse.FileType("wb"),
+                        default="trained/RandomForestClassifier.pkl")
+    parser.add_argument("-ro", "--regressor-outfile",
+                        dest="regressor_outfiles",
+                        help="Outout files for regressors",
+                        type=argparse.FileType("wb"),
+                        nargs=3,
+                        default=["trained/RandomForestRegressor_0.pkl",
+                                 "trained/RandomForestRegressor_1.pkl",
+                                 "trained/RandomForestRegressor_2.pkl"])
 
     args = parser.parse_args()
 
-    main(args.training_file)
+    main(args.training_file, args.classifier_columns, args.regressor_columns, args.classifier_outfile,
+         args.regressor_outfiles)
