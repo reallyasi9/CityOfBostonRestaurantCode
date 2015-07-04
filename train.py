@@ -41,13 +41,13 @@ def main(training_file, classifier_columns, regressor_columns, classifier_outfil
     classify_df = classify_df.apply(lambda x: sklearn.preprocessing.StandardScaler().fit_transform(x))
 
     classifier = RandomForestClassifier(n_jobs=-1,
-                                        verbose=1)
+                                        verbose=2)
 
-    bdt_param_map = {"n_estimators": scipy.stats.randint(low=500, high=2000),
-                     "min_weight_fraction_leaf": scipy.stats.uniform(0, 0.1)}
+    bdt_param_map = {"n_estimators": scipy.stats.randint(low=2000, high=2001),
+                     "min_samples_leaf": scipy.stats.randint(low=2, high=3)}
 
     # Randomize classification
-    n_iter_search = 100
+    n_iter_search = 1
     random_search = RandomizedSearchCV(classifier,
                                        param_distributions=bdt_param_map,
                                        n_iter=n_iter_search,
@@ -61,7 +61,8 @@ def main(training_file, classifier_columns, regressor_columns, classifier_outfil
           " parameter settings." % ((time() - start), n_iter_search))
 
     report(random_search.grid_scores_)
-    pickle.dump(random_search.best_estimator_, classifier_outfile)
+    with open(classifier_outfile, "wb") as of:
+        pickle.dump(random_search.best_estimator_, of)
 
     violators = random_search.best_estimator_.predict(classify_df)
 
@@ -74,10 +75,11 @@ def main(training_file, classifier_columns, regressor_columns, classifier_outfil
     regress_df = regress_df.apply(lambda x: sklearn.preprocessing.StandardScaler().fit_transform(x))
 
     regressor = RandomForestRegressor(n_jobs=-1,
-                                      verbose=1)
+                                      verbose=2)
 
-    bdt_param_map = {"n_estimators": scipy.stats.randint(low=10, high=1000),
-                     "min_weight_fraction_leaf": scipy.stats.uniform()}
+    n_iter_search = 1
+    bdt_param_map = {"n_estimators": scipy.stats.randint(low=2000, high=2001),
+                     "min_samples_leaf": scipy.stats.randint(low=2, high=3)}
 
     # Randomize classification
 
@@ -96,7 +98,8 @@ def main(training_file, classifier_columns, regressor_columns, classifier_outfil
 
         report(random_search.grid_scores_)
 
-        pickle.dump(random_search.best_estimator_, regressor_outfiles[n])
+        with open(regressor_outfiles[n], "wb") as of:
+            pickle.dump(random_search.best_estimator_, of)
 
     return
 
@@ -217,12 +220,10 @@ if __name__ == "__main__":
     parser.add_argument("-co", "--classifier-outfile",
                         dest="classifier_outfile",
                         help="Outout file for classifier",
-                        type=argparse.FileType("wb"),
                         default="trained/RandomForestClassifier.pkl")
     parser.add_argument("-ro", "--regressor-outfile",
                         dest="regressor_outfiles",
                         help="Outout files for regressors",
-                        type=argparse.FileType("wb"),
                         nargs=3,
                         default=["trained/RandomForestRegressor_0.pkl",
                                  "trained/RandomForestRegressor_1.pkl",
