@@ -6,11 +6,9 @@ from time import time
 import pickle
 import scipy.stats
 from sklearn.grid_search import RandomizedSearchCV
-from sklearn.grid_search import GridSearchCV
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.ensemble import RandomForestRegressor
 from operator import itemgetter
-import sklearn.ensemble
+from sklearn.linear_model import MultiTaskElasticNet
 import sklearn.tree
 
 __author__ = 'paste'
@@ -33,17 +31,17 @@ def main(training_file, classifier_columns, regressor_columns, classifier_outfil
     train_df = pandas.DataFrame.from_csv(training_file, index_col="id")
     outcomes = train_df.loc[:, targets]
 
-    classify_df = None
     if classifier_columns is None:
         classify_df = train_df._get_numeric_data().astype("float64")
+        classify_df.drop(targets, inplace=True, axis="columns")
     else:
         classify_df = train_df.loc[:, classifier_columns].astype("float64")
     classify_df = classify_df.apply(lambda x: sklearn.preprocessing.StandardScaler().fit_transform(x))
 
     classifier = RandomForestClassifier(n_jobs=-1,
-                                        verbose=2)
+                                        verbose=1)
 
-    bdt_param_map = {"n_estimators": scipy.stats.randint(low=2000, high=2001),
+    bdt_param_map = {"n_estimators": scipy.stats.randint(low=1565, high=1566),
                      "min_samples_leaf": scipy.stats.randint(low=2, high=3)}
 
     # Randomize classification
@@ -66,40 +64,42 @@ def main(training_file, classifier_columns, regressor_columns, classifier_outfil
 
     violators = random_search.best_estimator_.predict(classify_df)
 
-    regress_df = None
     if regressor_columns is None:
         regress_df = train_df._get_numeric_data().astype("float64")
+        regress_df.drop(targets, inplace=True, axis="columns")
     else:
         regress_df = train_df.loc[:, regressor_columns].astype("float64")
     regress_df = regress_df[violators]
     regress_df = regress_df.apply(lambda x: sklearn.preprocessing.StandardScaler().fit_transform(x))
 
-    regressor = RandomForestRegressor(n_jobs=-1,
-                                      verbose=2)
+    regressor = MultiTaskElasticNet()
 
-    n_iter_search = 1
-    bdt_param_map = {"n_estimators": scipy.stats.randint(low=2000, high=2001),
-                     "min_samples_leaf": scipy.stats.randint(low=2, high=3)}
+    float_outcomes = outcomes.astype("float64")
+
+    n_iter_search = 50
+    bdt_param_map = {"alpha": scipy.stats.uniform(loc=.5, scale=10),
+                     "l1_ratio": scipy.stats.uniform()}
 
     # Randomize classification
 
-    for n, oc in enumerate(targets):
-        # Randomize classification
-        random_search = RandomizedSearchCV(regressor,
-                                           param_distributions=bdt_param_map,
-                                           n_iter=n_iter_search,
-                                           refit=True)
+    # for n, oc in enumerate(targets):
+    # Randomize classification
+    random_search = RandomizedSearchCV(regressor,
+                                       param_distributions=bdt_param_map,
+                                       n_iter=n_iter_search,
+                                       refit=True)
 
-        print("Attempting %d searches on %s" % (n_iter_search, oc))
-        start = time()
-        random_search.fit(regress_df, outcomes.loc[violators, oc])
-        print("RandomizedSearchCV on %s took %.2f seconds for %d candidates"
-              " parameter settings." % (oc, (time() - start), n_iter_search))
+    oc = targets
+    print("Attempting %d searches on %s" % (n_iter_search, oc))
+    start = time()
+    random_search.fit(regress_df, float_outcomes.loc[violators, oc])
+    print("RandomizedSearchCV on %s took %.2f seconds for %d candidates"
+          " parameter settings." % (oc, (time() - start), n_iter_search))
 
-        report(random_search.grid_scores_)
+    report(random_search.grid_scores_)
 
-        with open(regressor_outfiles[n], "wb") as of:
-            pickle.dump(random_search.best_estimator_, of)
+    with open(regressor_outfiles[0], "wb") as of:
+        pickle.dump(random_search.best_estimator_, of)
 
     return
 
@@ -224,10 +224,8 @@ if __name__ == "__main__":
     parser.add_argument("-ro", "--regressor-outfile",
                         dest="regressor_outfiles",
                         help="Outout files for regressors",
-                        nargs=3,
-                        default=["trained/RandomForestRegressor_0.pkl",
-                                 "trained/RandomForestRegressor_1.pkl",
-                                 "trained/RandomForestRegressor_2.pkl"])
+                        nargs="+",
+                        default=["trained/MultiTaskElasticNetRegressor.pkl"])
 
     args = parser.parse_args()
 
